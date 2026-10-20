@@ -98,7 +98,9 @@
 
   const served = location.protocol.startsWith('http');
   const windowEl = document.getElementById('window');
-  function marksUrl() { return '/marks/' + windowEl.value.replace('-', '_') + '.csv'; }
+  // one file for everything you mark, whatever the window field says; the converter picks
+  // windows out of it. (Per-window files went out of sync with the field after reloads.)
+  function marksUrl() { return '/marks/all.csv'; }
   function marksCsv() { return ['frame,label', ...sortedMarks().map(k => `${k},${marks.get(k)}`)].join('\n') + '\n'; }
   let saveTimer = null;
   function save() {
@@ -106,7 +108,7 @@
     if (!served) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => fetch(marksUrl(), { method: 'PUT', body: marksCsv() })
-      .then(r => { status.textContent = r.ok ? `saved ${sortedMarks().length} marks to labeling/data/marks_${windowEl.value.replace('-', '_')}.csv` : 'save failed'; })
+      .then(r => { status.textContent = r.ok ? `saved ${sortedMarks().length} marks to labeling/data/marks_all.csv` : 'save failed'; })
       .catch(() => { status.textContent = 'save failed: is serve.py running?'; }), 300);
   }
   function load() { try { const s = localStorage.getItem(KEY); if (s) marks = new Map(JSON.parse(s)); } catch (e) {} }
@@ -308,11 +310,7 @@
   function setRate(r) { rate = r; v.playbackRate = r; speedSel.value = String(r); rememberPosition(); }
   speedSel.addEventListener('change', e => { setRate(+e.target.value); e.target.blur(); });
   document.getElementById('goto').addEventListener('change', e => { seek(+e.target.value); e.target.blur(); });
-  windowEl.addEventListener('change', () => {
-    // each window keeps its own marks file on the server
-    if (served) fetch(marksUrl()).then(r => r.ok ? r.text() : '').then(t => { marks = new Map(); if (t) parseMarks(t); render(); });
-    else render();
-  });
+  windowEl.addEventListener('change', () => { render(); rememberPosition(); });
 
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;

@@ -34,8 +34,9 @@ http://localhost:8765
 
 Nothing leaves the machine. The page loads the video, the public ground truth and the current
 model output by itself, so a reload needs no file picking, and every key press saves your marks to
-`labeling/data/marks_<window>.csv`. Set the window field to the window you are labelling; each
-window has its own marks file and switching the field loads it.
+`labeling/data/marks_all.csv`, one file for everything you mark. The window field only tells the
+page which stretch you are working on (marks outside it are dimmed in the list); the converter
+picks each window out of the file.
 
 The server prefers `BAR-ATH_tactical_proxy540.mp4` when it sits next to the original: a
 half-resolution copy with the same 199,319 frames and a keyframe every half second, so stepping
@@ -74,13 +75,13 @@ second-half one. If either is off by more than a frame or two, stop and report i
 ## From marks to a scorable file
 
 ```bash
-python labeling/marks_to_gt.py labeling/data/marks_50000_57499.csv --window 50000-57499 -o labeling/data/gt_w1.csv
+python labeling/marks_to_gt.py labeling/data/marks_all.csv --window 50000-57499 -o labeling/data/gt_w1.csv
 ```
 
 Merge several windows, and the public truth, into the internal set:
 
 ```bash
-python labeling/marks_to_gt.py labeling/data/marks_*.csv --window 50000-57499 --window 115000-122499 --window 166000-173499 --public ../mtah/evaluation/gt/BAR-ATH_possession_gt_public.csv -o labeling/data/gt_internal.csv
+python labeling/marks_to_gt.py labeling/data/marks_all.csv --window 50000-57499 --window 115000-122499 --window 166000-173499 --public ../mtah/evaluation/gt/BAR-ATH_possession_gt_public.csv -o labeling/data/gt_internal.csv
 ```
 
 Score the model, or a labeller's calibration marks exported through the same converter, with the
