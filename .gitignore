@@ -16,3 +16,5 @@ venv/
 .idea/
 .vscode/
 .DS_Store
+# Knowledge graph built by graphify (local tooling)
+graphify-out/
