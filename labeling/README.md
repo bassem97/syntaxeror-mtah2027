@@ -43,7 +43,7 @@ backwards is instant. The ffmpeg command that makes it is in `serve.py`; pass `-
 a specific file instead.
 
 Keys: arrows step 1 frame (Shift: 10), up/down jump 5 s, space plays, `,` `.` change speed.
-`H` `A` `D` mark the **start** of that state at the current frame. A state runs until the next
+`J` `K` `L` (or `1` `2` `3`, or `H` `A` `D`) mark the **start** of Barça / Athletic / dead ball at the current frame. A state runs until the next
 mark. `Backspace` deletes the mark at or before the cursor. The export button is only needed when
 the page is opened as a file without the server.
 
