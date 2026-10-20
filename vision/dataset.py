@@ -4,7 +4,7 @@ Frames are decoded once, sequentially, in-process with PyAV (random seeks in a 5
 Every `--every` labelled frame yields one positive crop (ball somewhere inside, position
 jittered) and one negative crop (same frame, far from the ball). The label is refined from the
 projected point to the strongest ball-like blob within a few pixels (vision/check_labels.py shows
-the projection sits a few pixels off); frames with no such blob keep the projected point. A column says whether the ball was isolated
+the projection sits a few pixels off); frames with no clear blob are dropped. A column says whether the ball was isolated
 (no player within 2 m), where the refined label is reliable; validation reads those separately.
 
     python vision/dataset.py --every 8          # ~14k positives + 14k negatives, 256 px crops
@@ -84,11 +84,13 @@ def build(every, size, refine_radius, min_response, seed=0, limit=None):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # refine to the ball-like blob when there is a clear one, else trust the projection
         hit = brightest_patch(gray, u[i], v[i], refine_radius)
-        if hit is not None and hit[2] >= min_response:
-            bu, bv = hit[0], hit[1]
-        else:
-            bu, bv = u[i], v[i]
+        if hit is None or hit[2] < min_response:
+            # A human check of 46 isolated crops: the refined point is on the ball 28 times out
+            # of the 30 where a ball is visible; in the other 16 there is no ball near the
+            # projection at all. So a frame without a clear blob is a wrong label, not a weak one.
             skipped += 1
+            continue
+        bu, bv = hit[0], hit[1]
         iso = int(dmin[i] > 2.0)
         # positive: ball anywhere in the crop, not always centred
         jx, jy = rng.integers(-size // 3, size // 3, size=2)
@@ -121,8 +123,8 @@ if __name__ == "__main__":
     ap.add_argument("--every", type=int, default=8, help="use every k-th labelled frame")
     ap.add_argument("--size", type=int, default=256)
     ap.add_argument("--refine-radius", type=int, default=20)
-    ap.add_argument("--min-response", type=float, default=12.0)
+    ap.add_argument("--min-response", type=float, default=20.0, help="blob response below which the frame is dropped")
     ap.add_argument("--limit", type=int, help="stop after this many candidate frames (smoke test)")
     args = ap.parse_args()
     kept, skipped = build(args.every, args.size, args.refine_radius, args.min_response, limit=args.limit)
-    print("done: {} positive + {} negative crops in {}; {} kept the projected point (no clear blob)".format(kept, kept, CROPS, skipped))
+    print("done: {} positive + {} negative crops in {}; {} frames dropped (no clear ball blob)".format(kept, kept, CROPS, skipped))
