@@ -75,6 +75,80 @@ def fill(u, v, ku, kv, ks, lo, hi, base_px, grow_px, cap_frames, min_score, max_
     return filled
 
 
+def track(u, v, ku, kv, ks, lo, hi, min_score, max_step, miss_cost, max_gap_frames=None):
+    """Follow the ball through each gap with dynamic programming over the top-k peaks.
+
+    States per frame: the k peaks plus "lost". Moving between peaks costs the distance in pixels
+    (a ball moves a bounded number of pixels per frame); a peak costs (1 - score); "lost" costs
+    miss_cost per frame. Anchored on the tracked ball at both ends when available. Fills u, v in
+    place where the path goes through a real peak; returns the mask of filled frames.
+    """
+    known = ~np.isnan(u)
+    filled = np.zeros(len(u), bool)
+    K = ku.shape[1]
+    for a, b in gaps(known, lo, hi):
+        if max_gap_frames and b - a + 1 > max_gap_frames:
+            continue
+        if np.isnan(ku[a:b + 1, 0]).any():
+            continue  # detector did not run on the whole gap
+        p0 = (u[a - 1], v[a - 1]) if a - 1 >= 0 and known[a - 1] else None
+        p1 = (u[b + 1], v[b + 1]) if b + 1 < len(u) and known[b + 1] else None
+        n = b - a + 1
+        INF = 1e18
+        cost = np.full((n, K + 1), INF)
+        back = np.zeros((n, K + 1), dtype=np.int16)
+        px = np.where(ks[a:b + 1] >= min_score, ku[a:b + 1], np.nan)
+        py = np.where(ks[a:b + 1] >= min_score, kv[a:b + 1], np.nan)
+        emit = np.where(ks[a:b + 1] >= min_score, 1.0 - ks[a:b + 1], INF)
+        # first frame: distance from the anchor before the gap
+        for j in range(K):
+            if emit[0, j] < INF:
+                dist = np.hypot(px[0, j] - p0[0], py[0, j] - p0[1]) if p0 else 0.0
+                cost[0, j] = emit[0, j] + (dist / max_step if dist <= 2 * max_step else INF)
+        cost[0, K] = miss_cost
+        for t in range(1, n):
+            for j in range(K + 1):
+                if j < K and emit[t, j] >= INF:
+                    continue
+                best, arg = INF, K
+                for i in range(K + 1):
+                    if cost[t - 1, i] >= INF:
+                        continue
+                    if j < K and i < K:
+                        dist = np.hypot(px[t, j] - px[t - 1, i], py[t, j] - py[t - 1, i])
+                        c = cost[t - 1, i] + (dist / max_step if dist <= 2 * max_step else INF)
+                    elif j < K:  # coming back from lost: no distance known
+                        c = cost[t - 1, i] + 1.0
+                    else:
+                        c = cost[t - 1, i] + miss_cost
+                    if c < best:
+                        best, arg = c, i
+                cost[t, j] = best + (emit[t, j] if j < K else 0.0)
+                back[t, j] = arg
+        # last frame: distance to the anchor after the gap
+        final = cost[n - 1].copy()
+        if p1:
+            for j in range(K):
+                if final[j] < INF:
+                    dist = np.hypot(px[n - 1, j] - p1[0], py[n - 1, j] - p1[1])
+                    final[j] += dist / max_step if dist <= 2 * max_step else INF
+        j = int(np.argmin(final))
+        if final[j] >= INF:
+            continue
+        for t in range(n - 1, -1, -1):
+            if j < K:
+                u[a + t], v[a + t] = px[t, j], py[t, j]
+                filled[a + t] = True
+            j = int(back[t, j]) if t > 0 else j
+    return filled
+
+
+def run(u, v, d, lo, hi, p):
+    if p["method"] == "track":
+        return track(u, v, d["ku"], d["kv"], d["ks"], lo, hi, p["min_score"], p["max_step"], p["miss_cost"], p["max_gap"])
+    return fill(u, v, d["ku"], d["kv"], d["ks"], lo, hi, p["base_px"], p["grow_px"], p["cap_frames"], p["min_score"], p["max_gap"])
+
+
 def simulate(n_gaps, length_frames, p, seed=0):
     u, v, _ = load_labels()
     d = np.load(OUT)
@@ -98,7 +172,7 @@ def simulate(n_gaps, length_frames, p, seed=0):
     for a, b in hidden:
         uu[a:b + 1] = np.nan
         vv[a:b + 1] = np.nan
-    filled = fill(uu, vv, d["ku"], d["kv"], d["ks"], 0, len(u) - 1, **p)
+    filled = run(uu, vv, d, 0, len(u) - 1, p)
     errs, miss = [], 0
     for a, b in hidden:
         for t in range(a, b + 1):
@@ -123,16 +197,19 @@ def main():
     ap.add_argument("--cap-frames", type=int, default=40)
     ap.add_argument("--min-score", type=float, default=0.3)
     ap.add_argument("--max-gap-s", type=float, default=8)
+    ap.add_argument("--method", default="track", choices=["track", "interp"])
+    ap.add_argument("--max-step", type=float, default=30, help="track: typical ball movement per frame, px")
+    ap.add_argument("--miss-cost", type=float, default=1.5, help="track: cost of a frame with no peak")
     args = ap.parse_args()
-    p = dict(base_px=args.base_px, grow_px=args.grow_px, cap_frames=args.cap_frames,
-             min_score=args.min_score, max_gap=int(args.max_gap_s * FPS))
+    p = dict(base_px=args.base_px, grow_px=args.grow_px, cap_frames=args.cap_frames, min_score=args.min_score,
+             max_gap=int(args.max_gap_s * FPS), method=args.method, max_step=args.max_step, miss_cost=args.miss_cost)
     if args.simulate:
         lo, hi = (int(x) for x in args.gap_frames.split("-"))
         simulate(args.simulate, (lo, hi), p)
         return
     u, v, _ = load_labels()
     d = dict(np.load(OUT))
-    filled = fill(u, v, d["ku"], d["kv"], d["ks"], 0, len(u) - 1, **p)
+    filled = run(u, v, d, 0, len(u) - 1, p)
     table = pd.read_csv(require(["homography"])[0])
     Hs = table[["h{}{}".format(r, c) for r in range(3) for c in range(3)]].values.reshape(-1, 3, 3)
     x, y = np.full(len(u), np.nan), np.full(len(u), np.nan)
