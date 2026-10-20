@@ -31,6 +31,7 @@
   #marks div { display: flex; justify-content: space-between; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
   #marks div:hover { background: #2d343b; }
   #marks .cur { background: #1f3b5c; }
+  #marks .out { opacity: .45; }
   .lab-H { color: var(--h); } .lab-A { color: var(--a); } .lab-D { color: #b1bac4; } .lab-X { color: var(--mute); }
   kbd { background: #0d1117; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-family: inherit; }
   .help { color: var(--mute); font-size: 13px; }
@@ -224,12 +225,13 @@
     frameEl.textContent = frame; clockEl.textContent = fmt(frame) + '  current: ' + labelAt(frame);
     const ks = sortedMarks();
     const [wa, wb] = windowRange();
-    const inside = ks.filter(k => k >= wa && k <= wb);
-    countEl.textContent = `(${inside.length} in window${ks.length > inside.length ? `, ${ks.length - inside.length} outside` : ''})`;
+    const inside = ks.filter(k => k >= wa && k <= wb).length;
+    countEl.textContent = `(${ks.length}${ks.length > inside ? `, ${ks.length - inside} outside the window` : ''})`;
     marksEl.innerHTML = '';
     rows = []; curRow = null;
-    for (const k of inside) {
+    for (const k of ks) {
       const d = document.createElement('div');
+      if (k < wa || k > wb) d.classList.add('out');
       d.innerHTML = `<span>${k} <span class="help">${fmt(k)}</span></span><span class="lab-${marks.get(k)}">${marks.get(k)}</span>`;
       d.onclick = () => seek(k);
       marksEl.appendChild(d);
