@@ -18,3 +18,5 @@ venv/
 .DS_Store
 # Knowledge graph built by graphify (local tooling)
 graphify-out/
+# Hand labels: ours, but they are answers for this match, so not public
+labeling/data/

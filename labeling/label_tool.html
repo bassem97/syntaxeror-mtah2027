@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Possession Labeller</title>
+<style>
+  :root { --bg: #111417; --panel: #1b2026; --fg: #e6e8eb; --mute: #8a939e; --h: #2f81f7; --a: #f0883e; --d: #6e7681; --x: #30363d; --line: #2d333b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; gap: 16px; align-items: center; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header label { color: var(--mute); }
+  header input[type=file] { color: var(--mute); max-width: 220px; }
+  main { display: grid; grid-template-columns: 1fr 300px; gap: 12px; padding: 12px 16px; }
+  video { width: 100%; background: #000; outline: none; }
+  #frame { font-size: 28px; font-variant-numeric: tabular-nums; }
+  #clock { color: var(--mute); font-variant-numeric: tabular-nums; }
+  .bar { display: flex; gap: 16px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  button { background: #23292f; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { background: #2d343b; }
+  button.H { border-color: var(--h); } button.A { border-color: var(--a); } button.D { border-color: var(--d); }
+  input[type=number], input[type=text] { background: #0d1117; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 110px; }
+  canvas { width: 100%; height: 70px; display: block; background: #0d1117; border: 1px solid var(--line); border-radius: 6px; }
+  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; max-height: calc(100vh - 100px); overflow: auto; }
+  aside h2 { font-size: 13px; color: var(--mute); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  #marks div { display: flex; justify-content: space-between; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
+  #marks div:hover { background: #2d343b; }
+  #marks .cur { background: #1f3b5c; }
+  .lab-H { color: var(--h); } .lab-A { color: var(--a); } .lab-D { color: #b1bac4; } .lab-X { color: var(--mute); }
+  kbd { background: #0d1117; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-family: inherit; }
+  .help { color: var(--mute); font-size: 13px; }
+  .help p { margin: 4px 0; }
+  #status { color: var(--mute); margin-left: auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <label>Video <input type="file" id="video-file" accept="video/mp4,video/*"></label>
+  <label>Reference CSVs (optional) <input type="file" id="ref-files" accept=".csv" multiple></label>
+  <label>Resume marks <input type="file" id="marks-file" accept=".csv"></label>
+  <span id="status">Load the tactical video to start. Marks autosave in this browser.</span>
+</header>
+<main>
+  <section>
+    <video id="v" muted playsinline preload="auto"></video>
+    <div class="bar">
+      <span id="frame">—</span><span id="clock"></span>
+      <span>go to <input type="number" id="goto" min="0" max="199318" placeholder="frame"></span>
+      <span>window <input type="text" id="window" value="11185-18684" title="first-last frame of the window you are labelling"></span>
+      <span id="speed" class="help">speed 1×</span>
+    </div>
+    <div class="bar">
+      <button class="H" data-mark="H">H home (Barça)</button>
+      <button class="A" data-mark="A">A away (Athletic)</button>
+      <button class="D" data-mark="D">D dead ball</button>
+      <button data-mark="X">X not labelled</button>
+      <button id="undo">delete mark here</button>
+      <button id="export">export marks CSV</button>
+      <button id="clear">clear all marks</button>
+    </div>
+    <canvas id="tl"></canvas>
+    <div class="help">
+      <p><kbd>←</kbd><kbd>→</kbd> 1 frame · <kbd>Shift</kbd>+arrows 10 frames · <kbd>↑</kbd><kbd>↓</kbd> 5 s · <kbd>Space</kbd> play/pause · <kbd>,</kbd><kbd>.</kbd> slower/faster</p>
+      <p><kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> <kbd>X</kbd> mark the current frame as the START of that state · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
+      <p>Timeline shows ±30 s: your marks on top, reference tracks below (load the public ground truth and the model output to compare).</p>
+    </div>
+  </section>
+  <aside>
+    <h2>Marks <span id="count"></span></h2>
+    <div id="marks"></div>
+  </aside>
+</main>
+<script>
+(() => {
+  const FPS = 25, N = 199319;
+  const v = document.getElementById('v');
+  const frameEl = document.getElementById('frame'), clockEl = document.getElementById('clock');
+  const status = document.getElementById('status');
+  const tl = document.getElementById('tl'), ctx = tl.getContext('2d');
+  const marksEl = document.getElementById('marks'), countEl = document.getElementById('count');
+  const COLORS = { H: '#2f81f7', A: '#f0883e', D: '#6e7681', X: '#30363d' };
+  let marks = new Map();           // frame -> label (start of a state)
+  let refs = [];                   // [{name, labels: Uint8Array of charcodes}]
+  let frame = 0, rate = 1;
+  const KEY = 'possession-marks';
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify([...marks])); } catch (e) {} }
+  function load() { try { const s = localStorage.getItem(KEY); if (s) marks = new Map(JSON.parse(s)); } catch (e) {} }
+  load();
+
+  document.getElementById('video-file').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    v.src = URL.createObjectURL(f);
+    status.textContent = f.name;
+  });
+  document.getElementById('ref-files').addEventListener('change', async e => {
+    for (const f of e.target.files) {
+      const text = await f.text();
+      const labels = new Uint8Array(N).fill(88);
+      for (const line of text.split(/\r?\n/).slice(1)) {
+        const c = line.indexOf(','); if (c < 0) continue;
+        const fr = +line.slice(0, c), l = line.slice(c + 1).trim().toUpperCase();
+        if (fr >= 0 && fr < N && l) labels[fr] = l.charCodeAt(0);
+      }
+      refs.push({ name: f.name.replace(/\.csv$/i, ''), labels });
+    }
+    draw();
+  });
+  document.getElementById('marks-file').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const text = await f.text();
+    for (const line of text.split(/\r?\n/).slice(1)) {
+      const [fr, l] = line.split(','); if (fr !== undefined && l) marks.set(+fr, l.trim().toUpperCase());
+    }
+    save(); render();
+  });
+
+  // frame-accurate position: prefer the presented frame's media time
+  function setFrameFromTime(t) { frame = Math.max(0, Math.min(N - 1, Math.floor(t * FPS + 1e-4))); render(); }
+  if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+    const cb = (now, meta) => { setFrameFromTime(meta.mediaTime); v.requestVideoFrameCallback(cb); };
+    v.requestVideoFrameCallback(cb);
+  }
+  v.addEventListener('timeupdate', () => { if (v.paused) setFrameFromTime(v.currentTime); });
+  v.addEventListener('seeked', () => setFrameFromTime(v.currentTime));
+
+  function seek(n) { n = Math.max(0, Math.min(N - 1, n)); v.pause(); v.currentTime = (n + 0.5) / FPS; frame = n; render(); }
+  function step(d) { seek(frame + d); }
+
+  function fmt(n) { const s = n / FPS; const m = Math.floor(s / 60); return `${m}:${(s - m * 60).toFixed(2).padStart(5, '0')}`; }
+
+  function sortedMarks() { return [...marks.keys()].sort((a, b) => a - b); }
+  function labelAt(n) { let l = 'X'; for (const k of sortedMarks()) { if (k <= n) l = marks.get(k); else break; } return l; }
+
+  function mark(l) { marks.set(frame, l); save(); render(); }
+  function undo() {
+    const ks = sortedMarks().filter(k => k <= frame); if (!ks.length) return;
+    marks.delete(ks[ks.length - 1]); save(); render();
+  }
+
+  function render() {
+    frameEl.textContent = frame; clockEl.textContent = fmt(frame) + '  current: ' + labelAt(frame);
+    const ks = sortedMarks(); countEl.textContent = `(${ks.length})`;
+    marksEl.innerHTML = '';
+    let cur = null;
+    for (const k of ks) {
+      const d = document.createElement('div');
+      d.innerHTML = `<span>${k} <span class="help">${fmt(k)}</span></span><span class="lab-${marks.get(k)}">${marks.get(k)}</span>`;
+      d.onclick = () => seek(k);
+      if (k <= frame) cur = d;
+      marksEl.appendChild(d);
+    }
+    if (cur) { cur.classList.add('cur'); cur.scrollIntoView({ block: 'nearest' }); }
+    draw();
+  }
+
+  function draw() {
+    const W = tl.width = tl.clientWidth * devicePixelRatio, H = tl.height = tl.clientHeight * devicePixelRatio;
+    ctx.clearRect(0, 0, W, H);
+    const span = 30 * FPS, f0 = frame - span, f1 = frame + span;
+    const x = n => (n - f0) / (f1 - f0) * W;
+    const rows = 1 + refs.length, rh = H / rows;
+    // our marks
+    const ks = sortedMarks();
+    let prev = f0, l = labelAt(f0);
+    for (const k of ks.concat([f1])) {
+      if (k <= f0) continue;
+      ctx.fillStyle = COLORS[l] || COLORS.X; ctx.fillRect(x(prev), 2, x(Math.min(k, f1)) - x(prev), rh - 4);
+      prev = k; l = marks.get(k) || l;
+    }
+    // references, in runs
+    refs.forEach((r, i) => {
+      let s = Math.max(0, f0), cur = String.fromCharCode(r.labels[s]);
+      for (let n = s + 1; n <= Math.min(N, f1); n++) {
+        const c = n < N ? String.fromCharCode(r.labels[n]) : null;
+        if (c !== cur || n === Math.min(N, f1)) { ctx.fillStyle = COLORS[cur] || COLORS.X; ctx.fillRect(x(s), rh * (i + 1) + 2, x(n) - x(s), rh - 4); s = n; cur = c; }
+      }
+      ctx.fillStyle = '#e6e8eb'; ctx.font = `${11 * devicePixelRatio}px system-ui`; ctx.fillText(r.name, 4 * devicePixelRatio, rh * (i + 1) + 13 * devicePixelRatio);
+    });
+    // cursor and window bounds
+    ctx.fillStyle = '#fff'; ctx.fillRect(x(frame) - 1, 0, 2, H);
+    const [wa, wb] = document.getElementById('window').value.split('-').map(Number);
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    if (wa >= f0 && wa <= f1) ctx.fillRect(x(wa) - 1, 0, 2, H);
+    if (wb >= f0 && wb <= f1) ctx.fillRect(x(wb) - 1, 0, 2, H);
+  }
+
+  document.querySelectorAll('[data-mark]').forEach(b => b.onclick = () => mark(b.dataset.mark));
+  document.getElementById('undo').onclick = undo;
+  document.getElementById('clear').onclick = () => { marks.clear(); save(); render(); };
+  document.getElementById('export').onclick = () => {
+    const lines = ['frame,label', ...sortedMarks().map(k => `${k},${marks.get(k)}`)];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
+    const w = document.getElementById('window').value.replace('-', '_');
+    a.download = `marks_${w}.csv`; a.click();
+  };
+  document.getElementById('goto').addEventListener('change', e => { seek(+e.target.value); e.target.blur(); });
+  document.getElementById('window').addEventListener('change', draw);
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    const big = e.shiftKey ? 10 : 1;
+    switch (e.key) {
+      case 'ArrowLeft': step(-big); break;
+      case 'ArrowRight': step(big); break;
+      case 'ArrowUp': step(5 * FPS); break;
+      case 'ArrowDown': step(-5 * FPS); break;
+      case ' ': if (v.paused) v.play(); else v.pause(); break;
+      case ',': rate = Math.max(0.1, rate / 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
+      case '.': rate = Math.min(4, rate * 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
+      case 'h': case 'H': mark('H'); break;
+      case 'a': case 'A': mark('A'); break;
+      case 'd': case 'D': mark('D'); break;
+      case 'x': case 'X': mark('X'); break;
+      case 'Backspace': undo(); break;
+      case '[': { const ks = sortedMarks().filter(k => k < frame); if (ks.length) seek(ks[ks.length - 1]); break; }
+      case ']': { const ks = sortedMarks().filter(k => k > frame); if (ks.length) seek(ks[0]); break; }
+      default: return;
+    }
+    e.preventDefault();
+  });
+  window.addEventListener('resize', draw);
+  render();
+})();
+</script>
+</body>
+</html>
