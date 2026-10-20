@@ -116,14 +116,25 @@
     save(); render();
   });
 
-  // frame-accurate position: prefer the presented frame's media time
-  function setFrameFromTime(t) { frame = Math.max(0, Math.min(N - 1, Math.floor(t * FPS + 1e-4))); render(); }
+  // frame-accurate position: prefer the presented frame's media time. While playing only the
+  // cheap parts update (counter + timeline, at most ~10 times a second); the marks list is
+  // rebuilt only when marks change or playback stops, so keys stay responsive.
+  let lastDraw = 0;
+  function setFrameFromTime(t, full) {
+    const n = Math.max(0, Math.min(N - 1, Math.floor(t * FPS + 1e-4)));
+    if (n === frame && !full) return;
+    frame = n;
+    if (full) { render(); return; }
+    frameEl.textContent = frame; clockEl.textContent = fmt(frame) + '  current: ' + labelAt(frame);
+    const now = performance.now();
+    if (now - lastDraw > 100) { lastDraw = now; draw(); }
+  }
   if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-    const cb = (now, meta) => { setFrameFromTime(meta.mediaTime); v.requestVideoFrameCallback(cb); };
+    const cb = (now, meta) => { setFrameFromTime(meta.mediaTime, false); v.requestVideoFrameCallback(cb); };
     v.requestVideoFrameCallback(cb);
   }
-  v.addEventListener('timeupdate', () => { if (v.paused) setFrameFromTime(v.currentTime); });
-  v.addEventListener('seeked', () => setFrameFromTime(v.currentTime));
+  v.addEventListener('pause', () => setFrameFromTime(v.currentTime, true));
+  v.addEventListener('seeked', () => setFrameFromTime(v.currentTime, true));
 
   function seek(n) { n = Math.max(0, Math.min(N - 1, n)); v.pause(); v.currentTime = (n + 0.5) / FPS; frame = n; render(); }
   function step(d) { seek(frame + d); }
@@ -151,12 +162,14 @@
       if (k <= frame) cur = d;
       marksEl.appendChild(d);
     }
-    if (cur) { cur.classList.add('cur'); cur.scrollIntoView({ block: 'nearest' }); }
+    if (cur) { cur.classList.add('cur'); if (v.paused) cur.scrollIntoView({ block: 'nearest' }); }
     draw();
   }
 
+  function sizeCanvas() { tl.width = tl.clientWidth * devicePixelRatio; tl.height = tl.clientHeight * devicePixelRatio; }
+  sizeCanvas();
   function draw() {
-    const W = tl.width = tl.clientWidth * devicePixelRatio, H = tl.height = tl.clientHeight * devicePixelRatio;
+    const W = tl.width, H = tl.height;
     ctx.clearRect(0, 0, W, H);
     const span = 30 * FPS, f0 = frame - span, f1 = frame + span;
     const x = n => (n - f0) / (f1 - f0) * W;
@@ -221,7 +234,7 @@
     }
     e.preventDefault();
   });
-  window.addEventListener('resize', draw);
+  window.addEventListener('resize', () => { sizeCanvas(); draw(); });
   render();
 })();
 </script>
