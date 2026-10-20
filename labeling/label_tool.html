@@ -67,7 +67,7 @@
     <canvas id="tl"></canvas>
     <div class="help">
       <p><kbd>Enter</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 1 frame · <kbd>Shift</kbd>+arrows 10 frames · <kbd>↑</kbd><kbd>↓</kbd> 5 s · <kbd>,</kbd><kbd>.</kbd> slower/faster</p>
-      <p><kbd>Q</kbd> Barça · <kbd>L</kbd> Athletic · <kbd>Space</kbd> dead ball, from the current frame on (also <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
+      <p><kbd>Q</kbd> Barça · <kbd>L</kbd> Athletic · <kbd>Space</kbd> dead ball, from the current frame on (also <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>). A press overrides what was marked after it until the next change; pressing the state already in force moves its start to here · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
       <p>Timeline shows ±30 s: your marks on top, reference tracks below. Click anywhere on it to jump to that frame.</p>
     </div>
   </section>
@@ -125,7 +125,7 @@
     status.textContent = 'loading references…';
     Promise.all([['public GT', '/ref/public.csv'], ['SyntaxEror', '/ref/model.csv']].map(([name, url]) =>
       fetch(url).then(r => r.ok ? r.text().then(t => parseRef(name, t)) : null).catch(() => null)))
-      .then(() => fetch(marksUrl()).then(r => r.ok ? r.text() : '').then(t => { if (t) { marks = new Map(); parseMarks(t); } }))
+      .then(() => fetch(marksUrl()).then(r => r.ok ? r.text() : '').then(t => { if (t) { marks = new Map(); parseMarks(t); normalize(); } }))
       .then(() => { status.textContent = `ready: ${refs.length} reference track(s), ${marks.size} marks for window ${windowEl.value}`; render(); });
   } else {
     load();
@@ -194,10 +194,31 @@
   function sortedMarks() { return [...marks.keys()].sort((a, b) => a - b); }
   function labelAt(n) { let l = 'X'; for (const k of sortedMarks()) { if (k <= n) l = marks.get(k); else break; } return l; }
 
+  // Marks are changes of state, so two consecutive marks with the same label are one mark.
+  function normalize() {
+    let prev = null;
+    for (const k of sortedMarks()) { const l = marks.get(k); if (l === prev) marks.delete(k); else prev = l; }
+  }
+  // A press means "from this frame on, this state", overriding what was there:
+  //  - a different state: it holds until the next change already marked after here, and any
+  //    marks of the old state in between go away
+  //  - the state already in force: the current run now starts here, so the frames before it
+  //    fall back to the earlier state (this is how a boundary is moved)
   function mark(l) {
-    // a mark is a change of state; pressing the current state again changes nothing
-    if (labelAt(frame) === l && !marks.has(frame)) { status.textContent = `already ${l} at ${frame}`; return; }
-    marks.set(frame, l); save(); render();
+    normalize();
+    const ks = sortedMarks();
+    const before = ks.filter(k => k <= frame);
+    const start = before.length ? before[before.length - 1] : null;
+    const old = start === null ? 'X' : marks.get(start);
+    if (l === old) {
+      if (start === null || start === frame) { status.textContent = `already ${l} from ${start}`; return; }
+      marks.delete(start);
+      marks.set(frame, l);
+      status.textContent = `${l} now starts at ${frame} (was ${start})`;
+    } else {
+      marks.set(frame, l);
+    }
+    normalize(); save(); render();
   }
   function undo() {
     const ks = sortedMarks().filter(k => k <= frame); if (!ks.length) return;
