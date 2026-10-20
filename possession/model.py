@@ -142,6 +142,11 @@ def evidence_parts(f, p):
         for fr, side, _, _ in T:
             fr = int(fr)
             s_touch[fr:fr + span] += side * p["touch_w"] / span
+        # Receptions: a fast ball slowing onto a player. Few, but attributed with high precision.
+        if p["recv_w"] > 0:
+            for fr, side, _, _ in touches.receptions(f, v_hi=p["recv_vhi"], v_lo=p["recv_vlo"], attach_m=p["recv_m"]):
+                fr = int(fr)
+                s_touch[fr:fr + span] += side * p["recv_w"] / span
         team = team + s_touch
 
     # Team shape, which needs no ball: the side in possession spreads out, the defending side
@@ -288,6 +293,10 @@ def argparser():
     ap.add_argument("--carry-s", type=int, default=60, help="seconds the carry lasts")
     ap.add_argument("--touch-w", type=float, default=3.0, help="evidence impulse per detected touch")
     ap.add_argument("--touch-dv", type=float, default=4.0, help="ball velocity change (m/s) that counts as a touch")
+    ap.add_argument("--recv-w", type=float, default=0.0, help="evidence impulse per detected reception")
+    ap.add_argument("--recv-vhi", type=float, default=4.0)
+    ap.add_argument("--recv-vlo", type=float, default=2.5)
+    ap.add_argument("--recv-m", type=float, default=2.5)
     return ap
 
 

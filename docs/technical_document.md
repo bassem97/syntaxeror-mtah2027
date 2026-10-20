@@ -89,7 +89,12 @@ tags are 70 to 250 seconds long and start during the build-up. We use the tags f
 the goal-to-kick-off window, anchored on the goal moment found in the ball track, and the restart
 prior on the team. The prior is worth about one point of `spellF1` on the public window.
 
-**Tried and dropped.** Collective deceleration of all players as a whistle cue: only one of the four
+**Tried and dropped.** A reception detector (a fast ball slowing onto a player, `touches.receptions`):
+it fires about four times a minute and names the right team nine times in ten, but it changes no
+label, because a reception is exactly the frame where the control term already fires. The
+signature is also present at only three of the twelve team switches in the public window; the
+others are kicks, which the touch detector covers, or headers the projected ball cannot show.
+Collective deceleration of all players as a whistle cue: only one of the four
 public stoppages shows it. Holding the out-of-bounds cue until the next kick: throw-ins have no
 kick from standstill, so the hold ran for half a minute. Distance-weighted control instead of a
 radius: it only lengthened possessions. Team shape on every frame: it is a slow signal and merged

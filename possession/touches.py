@@ -47,6 +47,31 @@ def detect(f, dv_min=4.0, attach_m=3.5, refractory=6, smooth=2):
     return out
 
 
+def receptions(f, v_hi=4.0, v_lo=2.5, attach_m=2.5, refractory=10):
+    """A fast ball that slows down onto a player: a controlled reception. Rarer than touches
+    (about 4 per minute) but attributed to the right team 9 times in 10 on the public window."""
+    length, width = GAMES[GAME]["pitch"]
+    bx = f["ball_x"] * length
+    by = f["ball_y"] * width
+    n = len(bx)
+    sx = pd.Series(bx).rolling(5, center=True).mean().values
+    sy = pd.Series(by).rolling(5, center=True).mean().values
+    v = np.full(n, np.nan)
+    v[1:-1] = np.hypot(sx[2:] - sx[:-2], sy[2:] - sy[:-2]) * FPS / 2
+    vmax_prev = pd.Series(v).rolling(10).max().shift(1).values
+    vmean_next = pd.Series(v).rolling(10).mean().shift(-9).values
+    dmin = np.fmin(f["d_home"], f["d_away"])
+    cand = np.where((vmax_prev > v_hi) & (vmean_next < v_lo) & (dmin < attach_m))[0]
+    rows = []
+    last = -10 ** 9
+    for i in cand:
+        if i - last <= refractory:
+            continue
+        rows.append((i, 1 if f["d_home"][i] <= f["d_away"][i] else -1, dmin[i], 0.0))
+        last = i
+    return np.array(rows, dtype=float) if rows else np.zeros((0, 4))
+
+
 def reappearances(f, attach_m=2.0, min_gap=5):
     """The ball reappears next to a player after being lost: treat as a touch by that team."""
     vis = ~np.isnan(f["ball_x"])
