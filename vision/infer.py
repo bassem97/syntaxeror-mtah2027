@@ -23,6 +23,7 @@ sys.path.insert(0, ROOT)
 from possession.games import DATA_DIR, asset_paths, require, source_frames  # noqa: E402
 from vision.model import BallNet, topk_peaks  # noqa: E402
 from vision.train import WEIGHTS  # noqa: E402
+from vision.throttle import Throttle  # noqa: E402
 
 OUT = os.path.join(DATA_DIR, "cache", "ball_detector.npz")
 
@@ -61,7 +62,9 @@ def main():
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--weights", default=WEIGHTS)
     ap.add_argument("--out", default=OUT)
+    ap.add_argument("--gpu-share", type=float, default=1.0, help="fraction of the GPU to use; the rest is left to the desktop")
     args = ap.parse_args()
+    throttle = Throttle(args.gpu_share)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = BallNet().to(device)
     model.load_state_dict(torch.load(args.weights, map_location=device))
@@ -101,6 +104,7 @@ def main():
             u[i], v[i], score[i] = pu[k, 0], pv[k, 0], ps[k, 0]
             x[i], y[i] = unproject(Hs[i], u[i], v[i])
         batch, idx = [], []
+        throttle.step()
 
     for i, img in decode(asset_paths()["video"], args.start, args.end):
         batch.append(img)

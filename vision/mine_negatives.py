@@ -23,6 +23,7 @@ from vision.autolabels import load_labels  # noqa: E402
 from vision.dataset import CROPS, crop_at, frames  # noqa: E402
 from vision.model import BallNet, topk_peaks  # noqa: E402
 from vision.train import WEIGHTS  # noqa: E402
+from vision.throttle import Throttle  # noqa: E402
 
 
 def main():
@@ -34,7 +35,9 @@ def main():
     ap.add_argument("--size", type=int, default=256)
     ap.add_argument("--weights", default=WEIGHTS)
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--gpu-share", type=float, default=1.0, help="fraction of the GPU to use; the rest is left to the desktop")
     args = ap.parse_args()
+    throttle = Throttle(args.gpu_share)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = BallNet().to(device)
     model.load_state_dict(torch.load(args.weights, map_location=device))
@@ -67,6 +70,7 @@ def main():
                 rows.append((name, i, -1, -1, 0))
                 taken += 1
         batch, idx = [], []
+        throttle.step()
 
     gen = frames(asset_paths()["video"], step=args.every)
     for i, img in gen:

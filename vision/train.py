@@ -23,6 +23,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 from possession.games import DATA_DIR  # noqa: E402
 from vision.model import STRIDE, BallNet, focal_loss, gaussian_target, peaks  # noqa: E402
+from vision.throttle import Throttle  # noqa: E402
 
 CROPS = os.path.join(DATA_DIR, "cache", "crops")
 WEIGHTS = os.path.join(DATA_DIR, "cache", "ballnet.pt")
@@ -97,7 +98,9 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-3)
     ap.add_argument("--limit", type=int, help="use only the first N training crops (smoke test)")
     ap.add_argument("--out", default=WEIGHTS)
+    ap.add_argument("--gpu-share", type=float, default=1.0, help="fraction of the GPU to use; the rest is left to the desktop")
     args = ap.parse_args()
+    throttle = Throttle(args.gpu_share)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     train, val = read_rows()
     if args.limit:
@@ -121,6 +124,7 @@ def main():
             sched.step()
             total += loss.item()
             steps += 1
+            throttle.step()
         stats = evaluate(model, vl, device)
         print("epoch {:>2}  loss {:.3f}  {:.0f}s  val: peak within 8px {:.3f} (isolated {:.3f})  recall@0.5 {:.3f}  false alarm@0.5 {:.3f}  pos score {:.2f}  neg p95 {:.2f}".format(
             epoch + 1, total / max(steps, 1), time.time() - t0, stats["hit8"], stats["hit8_iso"], stats["recall@0.5"], stats["false_alarm@0.5"],
