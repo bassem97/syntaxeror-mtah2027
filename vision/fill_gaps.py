@@ -216,7 +216,12 @@ def main():
     for t in np.flatnonzero(filled):
         x[t], y[t] = unproject(Hs[t], u[t], v[t])
     d["x"], d["y"] = x, y
-    d["score"] = np.where(filled, d["score"], 0.0).astype(np.float32)
+    # confidence of the peak actually chosen (the tracker may take any of the k), 0 elsewhere
+    score = np.zeros(len(u), dtype=np.float32)
+    for t in np.flatnonzero(filled):
+        j = int(np.argmin(np.abs(d["ku"][t] - u[t]) + np.abs(d["kv"][t] - v[t])))
+        score[t] = d["ks"][t, j]
+    d["score"] = score
     np.savez_compressed(OUT, **d)
     print("filled {} frames; wrote {}".format(filled.sum(), OUT))
 
