@@ -324,14 +324,14 @@
       case 'ArrowUp': step(5 * FPS); break;
       case 'ArrowDown': step(-5 * FPS); break;
       case 'Enter': if (v.paused) v.play(); else v.pause(); break;
-      case ' ': mark('D'); break;
-      case 'q': case 'Q': mark('H'); break;
+      case ' ': mark('D', e.shiftKey); break;
+      case 'q': case 'Q': mark('H', e.shiftKey); break;
       case ',': rate = Math.max(0.1, rate / 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
       case '.': rate = Math.min(4, rate * 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
-      case 'h': case 'H': case 'j': case 'J': case '1': mark('H'); break;
-      case 'a': case 'A': case 'k': case 'K': case 'l': case 'L': case '2': mark('A'); break;
-      case 'd': case 'D': case '3': mark('D'); break;
-      case 'x': case 'X': case '0': mark('X'); break;
+      case 'h': case 'H': case 'j': case 'J': case '1': case '!': mark('H', e.shiftKey); break;
+      case 'a': case 'A': case 'k': case 'K': case 'l': case 'L': case '2': case '@': mark('A', e.shiftKey); break;
+      case 'd': case 'D': case '3': case '#': mark('D', e.shiftKey); break;
+      case 'x': case 'X': case '0': mark('X', e.shiftKey); break;
       case 'Backspace': undo(); break;
       case '[': { const ks = sortedMarks().filter(k => k < frame); if (ks.length) seek(ks[ks.length - 1]); break; }
       case ']': { const ks = sortedMarks().filter(k => k > frame); if (ks.length) seek(ks[0]); break; }
