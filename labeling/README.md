@@ -37,12 +37,10 @@ model output by itself, so a reload needs no file picking, and every key press s
 `labeling/data/marks_<window>.csv`. Set the window field to the window you are labelling; each
 window has its own marks file and switching the field loads it.
 
-If the video feels sluggish, serve the half-resolution proxy instead (same frame numbers, keyframe
-every half second so stepping backwards is instant):
-
-```bash
-python labeling/serve.py --video "../tactical/BAR-ATH_tactical_proxy540.mp4"
-```
+The server prefers `BAR-ATH_tactical_proxy540.mp4` when it sits next to the original: a
+half-resolution copy with the same 199,319 frames and a keyframe every half second, so stepping
+backwards is instant. The ffmpeg command that makes it is in `serve.py`; pass `--video` to serve
+a specific file instead.
 
 Keys: arrows step 1 frame (Shift: 10), up/down jump 5 s, space plays, `,` `.` change speed.
 `H` `A` `D` mark the **start** of that state at the current frame. A state runs until the next

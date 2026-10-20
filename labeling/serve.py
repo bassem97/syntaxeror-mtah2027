@@ -111,6 +111,12 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
     VIDEO = args.video or asset_paths()["video"]
+    # Prefer the seek-friendly proxy when it sits next to the original (same frame numbers):
+    #   ffmpeg -i BAR-ATH_tactical.mp4 -vf scale=960:-2 -r 25 -vsync cfr -c:v libx264 -preset veryfast
+    #          -crf 24 -g 12 -keyint_min 12 -sc_threshold 0 -an -movflags +faststart BAR-ATH_tactical_proxy540.mp4
+    proxy = VIDEO[:-4] + "_proxy540.mp4"
+    if not args.video and os.path.isfile(proxy):
+        VIDEO = proxy
     if not os.path.isfile(VIDEO):
         sys.exit("video not found: {}".format(VIDEO))
     print("serving", VIDEO)
