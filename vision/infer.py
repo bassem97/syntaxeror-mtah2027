@@ -3,7 +3,8 @@
     python vision/infer.py                     # -> data/cache/ball_detector.npz
     python vision/infer.py --start 11185 --end 18684   # a stretch, for checking
 
-Per frame: u, v (pixels of the heatmap peak) and score (peak probability). Pitch coordinates
+Per frame: u, v (pixels of the heatmap peak) and score (peak probability), plus the five
+strongest peaks (ku, kv, ks) so a later pass can pick the one that continues the ball's path. Pitch coordinates
 come from the inverse homography of that frame, in the same normalised 0-1 units as the
 tracking, so possession/features.py can use the detector wherever the tracker lost the ball.
 """
@@ -20,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 from possession.games import DATA_DIR, asset_paths, require, source_frames  # noqa: E402
-from vision.model import BallNet, peaks  # noqa: E402
+from vision.model import BallNet, topk_peaks  # noqa: E402
 from vision.train import WEIGHTS  # noqa: E402
 
 OUT = os.path.join(DATA_DIR, "cache", "ball_detector.npz")
@@ -73,9 +74,15 @@ def main():
     score = np.zeros(n, dtype=np.float32)
     x = np.full(n, np.nan)
     y = np.full(n, np.nan)
+    K = 5
+    ku = np.full((n, K), np.nan, dtype=np.float32)
+    kv = np.full((n, K), np.nan, dtype=np.float32)
+    ks = np.zeros((n, K), dtype=np.float32)
     if os.path.isfile(args.out):  # a partial run can be extended
         d = np.load(args.out)
         u, v, score, x, y = d["u"], d["v"], d["score"], d["x"], d["y"]
+        if "ku" in d:
+            ku, kv, ks = d["ku"], d["kv"], d["ks"]
 
     t0 = time.time()
     batch, idx = [], []
@@ -87,9 +94,11 @@ def main():
             return
         with torch.no_grad():
             t = torch.from_numpy(np.stack(batch)).permute(0, 3, 1, 2).to(device, non_blocking=True)
-            pu, pv, ps = peaks(model(t))
+            pu, pv, ps = topk_peaks(model(t), K)
+        pu, pv, ps = pu.cpu().numpy(), pv.cpu().numpy(), ps.cpu().numpy()
         for k, i in enumerate(idx):
-            u[i], v[i], score[i] = pu[k].item(), pv[k].item(), ps[k].item()
+            ku[i], kv[i], ks[i] = pu[k], pv[k], ps[k]
+            u[i], v[i], score[i] = pu[k, 0], pv[k, 0], ps[k, 0]
             x[i], y[i] = unproject(Hs[i], u[i], v[i])
         batch, idx = [], []
 
@@ -101,9 +110,9 @@ def main():
         done += 1
         if done % 5000 == 0:
             print("  {} frames, {:.0f} fps".format(done, done / (time.time() - t0)), flush=True)
-            np.savez_compressed(args.out, u=u, v=v, score=score, x=x, y=y)
+            np.savez_compressed(args.out, u=u, v=v, score=score, x=x, y=y, ku=ku, kv=kv, ks=ks)
     flush()
-    np.savez_compressed(args.out, u=u, v=v, score=score, x=x, y=y)
+    np.savez_compressed(args.out, u=u, v=v, score=score, x=x, y=y, ku=ku, kv=kv, ks=ks)
     sl = slice(args.start, args.end + 1)
     print("wrote {}: {} frames in {:.0f}s; score pct(10,50,90) = {}".format(
         args.out, done, time.time() - t0, np.percentile(score[sl], [10, 50, 90]).round(2)))

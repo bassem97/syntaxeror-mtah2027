@@ -65,10 +65,19 @@ def focal_loss(logits, target, alpha=2.0, beta=4.0):
 
 def peaks(logits):
     """(u, v, score) of the heatmap maximum per image, in input pixels."""
+    u, v, s = topk_peaks(logits, 1)
+    return u[:, 0], v[:, 0], s[:, 0]
+
+
+def topk_peaks(logits, k=5):
+    """The k strongest local maxima per image, (n, k) each, in input pixels. A 3x3 max-pool
+    keeps one entry per blob, so the k peaks are k different places, not one blob k times."""
     prob = torch.sigmoid(logits)
     n, _, h, w = prob.shape
+    pooled = F.max_pool2d(prob, 3, stride=1, padding=1)
+    prob = prob * (pooled == prob)
     flat = prob.view(n, -1)
-    score, idx = flat.max(1)
+    score, idx = flat.topk(k, dim=1)
     v = (idx // w).float() * STRIDE + STRIDE / 2
     u = (idx % w).float() * STRIDE + STRIDE / 2
     return u, v, score
