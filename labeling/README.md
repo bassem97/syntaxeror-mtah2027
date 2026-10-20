@@ -22,16 +22,32 @@ the reference track in the tool and adjust before continuing.
 
 ## Tool
 
-Open `labeling/label_tool.html` in Chrome or Edge (double-click; nothing is uploaded anywhere, the
-video is read from disk). Load `BAR-ATH_tactical.mp4`, and as reference CSVs load the public ground
-truth (`../mtah/evaluation/gt/BAR-ATH_possession_gt_public.csv`) and the current model output
-(`out/SyntaxEror.csv`) so both show on the timeline under your marks. Set the window field to the
-window you are labelling.
+Start the local server from the repository root, then open the page in Chrome or Edge:
+
+```bash
+python labeling/serve.py
+```
+
+```
+http://localhost:8765
+```
+
+Nothing leaves the machine. The page loads the video, the public ground truth and the current
+model output by itself, so a reload needs no file picking, and every key press saves your marks to
+`labeling/data/marks_<window>.csv`. Set the window field to the window you are labelling; each
+window has its own marks file and switching the field loads it.
+
+If the video feels sluggish, serve the half-resolution proxy instead (same frame numbers, keyframe
+every half second so stepping backwards is instant):
+
+```bash
+python labeling/serve.py --video "../tactical/BAR-ATH_tactical_proxy540.mp4"
+```
 
 Keys: arrows step 1 frame (Shift: 10), up/down jump 5 s, space plays, `,` `.` change speed.
 `H` `A` `D` mark the **start** of that state at the current frame. A state runs until the next
-mark. `Backspace` deletes the mark at or before the cursor. Marks autosave in the browser; export
-with the button when done (`marks_<window>.csv`) and keep the file.
+mark. `Backspace` deletes the mark at or before the cursor. The export button is only needed when
+the page is opened as a file without the server.
 
 Check the clock once: at frame 11185 the first-half kick-off is being struck, and at 113742 the
 second-half one. If either is off by more than a frame or two, stop and report it.
