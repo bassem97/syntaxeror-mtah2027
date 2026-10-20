@@ -53,6 +53,7 @@ make_submission.py          the one command
 possession/
   features.py               tracking file -> cached per-frame features (ball, distances, speeds)
   model.py                  evidence terms + Viterbi decoder; all parameters are CLI flags
+  touches.py                ball touches from velocity changes, attributed to the nearest team
   smart_tagging.py          Smart Tagging XML reader (vendored from the organisers' repo, MIT)
   games.py                  match constants and asset paths (vendored, MIT; one path edit)
 analysis/

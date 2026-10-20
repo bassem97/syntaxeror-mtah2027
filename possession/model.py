@@ -9,15 +9,17 @@ every state change. The switching cost is what turns flickering per-frame eviden
 possessions: a change of possession has to be backed by roughly cost / typical-evidence frames.
 
 Alive vs dead is decided by the dead-ball evidence alone (max(e_H, e_A) is always 0):
-  + ball tracked outside the pitch
+  + ball tracked outside the pitch, held for a few seconds afterwards (the stoppage instant)
   + mean player speed low compared with a rolling 3-minute median (the tempo drifts a lot)
   + one whole team far from the ball (set-piece geometry; capped, build-up looks the same)
   + ball lying still with nobody within 1.5 m (placed for a restart)
-  + between a GOALS tag and the next kick-off tag
+  + from the goal moment (ball over the line, or its last fast movement inside the GOALS tag)
+    to the next kick-off tag
   - ball travelling fast, and a kick from standstill (restart or pass: either way in play)
 Team evidence (H vs A only): nearest-player gap on control frames (somebody within ctrl_m of the
-ball), a weak carry of the last controlling team through flight and loose balls, and a prior for
-the team a tagged set piece names.
+ball), a carry of the last controlling team through flight and loose balls until the other side
+controls it, an impulse at every detected touch (possession/touches.py), team spread on frames
+without a ball, and a prior for the team a tagged set piece names.
 
 Costs are not fitted to the public window on purpose -- see EVALUATION.md -- they sit where the
 full-match possession and stoppage counts (analysis/counts.py) look like a football match.
@@ -29,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from . import smart_tagging as st
+from . import touches
 from .features import load
 from .games import GAME, half_video_blocks
 
@@ -61,6 +64,13 @@ def evidence_parts(f, p):
     vis = ~np.isnan(f["ball_x"])
     m = p["out_margin"]
     out = vis & ((f["ball_x"] < -m) | (f["ball_x"] > 1 + m) | (f["ball_y"] < -m) | (f["ball_y"] > 1 + m))
+    # The ball seen out marks the stoppage instant; it is then dead for at least a few seconds
+    # (nobody throws in or kicks a goal kick that fast), whatever the tracking shows meanwhile.
+    s_out = p["out_w"] * out.astype(float)
+    hold = int(p["out_hold_s"] * FPS)
+    if hold > 0:
+        for i in np.where(out)[0]:
+            s_out[i + 1:i + 1 + hold] = np.maximum(s_out[i + 1:i + 1 + hold], p["out_hold_w"])
 
     spd = roll(f["mean_speed"], FPS)
     tempo = roll(np.nan_to_num(f["mean_speed"], nan=np.nanmedian(f["mean_speed"])), 90 * FPS, "median")
@@ -90,26 +100,64 @@ def evidence_parts(f, p):
     goals = sorted(e["start_frame"] for e in ev if e["code"] == "GOALS")
     kickoffs = sorted(e["start_frame"] for e in ev
                       if e["code"] == "SET PIECES" and "kick off" in (e["tags"].get("Type") or "").lower())
+    # A GOALS tag starts well before the goal (it includes the build-up), so the dead window
+    # starts at the goal moment: the ball seen beyond the line, or failing that the last fast
+    # ball movement before it disappears into the net, searched within a minute of the tag.
     for g in goals:
         nxt = [k for k in kickoffs if k > g]
-        if nxt:
-            s_goal[g:nxt[0]] = 3.0
+        if not nxt:
+            continue
+        win = slice(g, min(g + 60 * FPS, nxt[0]))
+        o = np.where(out[win])[0]
+        if len(o):
+            moment = g + o[0]
+        else:
+            fast = np.where(vis[win] & (bspd[win] > 4.0))[0]
+            moment = g + fast[-1] if len(fast) else g
+        s_goal[moment:nxt[0]] = 3.0
 
     # Team evidence only where somebody controls the ball. In flight or loose, carry the last
     # controlling team weakly: possession stays with the last team that had it until the other
     # side gains control, which is the challenge's own definition of a change of possession.
     gap = np.nan_to_num(f["d_away"] - f["d_home"], nan=0.0)
-    control = vis & (dmin < p["ctrl_m"])
-    team = np.where(control, np.clip(gap / 2, -2, 2), 0.0)
+    if p["ctrl_soft"] > 0:
+        # Distance-weighted: full weight at the ball, fading with exp(-dmin / ctrl_soft), so a
+        # tracked touch at 2 m still counts for something and there is no cliff at a radius.
+        weight = np.where(vis, np.exp(-np.nan_to_num(dmin, nan=99.0) / p["ctrl_soft"]), 0.0)
+        control = weight > 0.3
+        team = np.clip(gap / 2, -2, 2) * weight
+    else:
+        control = vis & (dmin < p["ctrl_m"])
+        team = np.where(control, np.clip(gap / 2, -2, 2), 0.0)
     last = pd.Series(np.where(control, np.sign(gap), np.nan)).ffill(limit=p["carry_s"] * FPS).fillna(0).values
     team = team + np.where(control, 0.0, p["carry_w"] * last)
+
+    # Touches: a sharp change of ball velocity next to a player is the moment the corrected
+    # tracking hands possession over. Each touch is an impulse for the toucher's team, spread over
+    # a few frames so the decoder can place the boundary at it.
+    if p["touch_w"] > 0:
+        T = np.vstack([touches.detect(f, dv_min=p["touch_dv"]), touches.reappearances(f)])
+        s_touch = np.zeros(n)
+        span = 5
+        for fr, side, _, _ in T:
+            fr = int(fr)
+            s_touch[fr:fr + span] += side * p["touch_w"] / span
+        team = team + s_touch
+
+    # Team shape, which needs no ball: the side in possession spreads out, the defending side
+    # compacts. Weak per frame, but it is the only team evidence on the 41% of frames without a
+    # ball, and it never flickers the way proximity does.
+    if p["shape_w"] > 0:
+        spread = roll(f["home_spread"] - f["away_spread"], FPS)
+        s_shape = np.clip(np.nan_to_num(spread, nan=0.0) / 6.0, -1, 1) * p["shape_w"]
+        team = team + (np.where(vis, 0.0, s_shape) if p["shape_invis_only"] else s_shape)
 
     # Restart prior: a tagged set piece names the team that restarts play. The tag starts up to
     # ~12 s before the actual restart, so the prior covers a window rather than an instant.
     home_name = "barcelona"
     team = team + restart_prior(ev, goals, kickoffs, home_name, n, p["restart_w"])
     return {"speed": s_speed, "far": s_far, "placed": s_placed, "moving": s_moving, "kick": s_kick, "goal": s_goal,
-            "out": p["out_w"] * out, "invis": np.where(vis, 0.0, p["invis_w"]), "team": team}
+            "out": s_out, "invis": np.where(vis, 0.0, p["invis_w"]), "team": team}
 
 
 def restart_prior(ev, goals, kickoffs, home_name, n, w):
@@ -229,10 +277,17 @@ def argparser():
     ap.add_argument("--out-w", type=float, default=4)
     ap.add_argument("--invis-w", type=float, default=0.3)
     ap.add_argument("--out-margin", type=float, default=0.005)
+    ap.add_argument("--out-hold-s", type=float, default=3.0, help="seconds of held dead evidence after the ball is seen out")
+    ap.add_argument("--out-hold-w", type=float, default=2.0)
+    ap.add_argument("--ctrl-soft", type=float, default=0.0, help="metres; >0 switches to distance-weighted control evidence")
+    ap.add_argument("--shape-w", type=float, default=0.15, help="weight of the team-spread evidence")
+    ap.add_argument("--shape-invis-only", type=int, default=1, help="1: shape evidence only on frames without a ball")
     ap.add_argument("--restart-w", type=float, default=0.5)
     ap.add_argument("--ctrl-m", type=float, default=1.5, help="a player this close has the ball")
     ap.add_argument("--carry-w", type=float, default=0.25, help="evidence for the last controlling team while nobody has it")
-    ap.add_argument("--carry-s", type=int, default=5, help="seconds the carry lasts")
+    ap.add_argument("--carry-s", type=int, default=60, help="seconds the carry lasts")
+    ap.add_argument("--touch-w", type=float, default=3.0, help="evidence impulse per detected touch")
+    ap.add_argument("--touch-dv", type=float, default=4.0, help="ball velocity change (m/s) that counts as a touch")
     return ap
 
 

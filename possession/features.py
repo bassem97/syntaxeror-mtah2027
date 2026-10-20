@@ -11,6 +11,8 @@ Arrays, all length n_frames (video frame index, 0-based):
   mean_speed          mean speed (m/s) of all tracked players
   n_players           tracked players on the frame
   ball_speed          ball speed in m/s from consecutive visible frames (NaN otherwise)
+  home_cx, away_cx    team centroid along the pitch, metres
+  home_spread, away_spread   mean distance of a team's players from their centroid, metres
 """
 import os
 import xml.etree.ElementTree as ET
@@ -72,6 +74,17 @@ def build():
     step = np.sqrt(np.diff(bx) ** 2 + np.diff(by) ** 2) * GAMES[GAME]["fps"]
     ball_speed[1:] = step
 
+    # Team shape, independent of the ball: centroid along the pitch and spread (mean distance of
+    # a team's players from their centroid). The team in possession tends to spread and push up.
+    hx = np.where(is_home[None, :], px, np.nan)
+    hy = np.where(is_home[None, :], py, np.nan)
+    ax = np.where(~is_home[None, :], px, np.nan)
+    ay = np.where(~is_home[None, :], py, np.nan)
+    home_cx, away_cx = np.nanmean(hx, axis=1), np.nanmean(ax, axis=1)
+    home_cy, away_cy = np.nanmean(hy, axis=1), np.nanmean(ay, axis=1)
+    home_spread = np.nanmean(np.sqrt((hx - home_cx[:, None]) ** 2 + (hy - home_cy[:, None]) ** 2), axis=1)
+    away_spread = np.nanmean(np.sqrt((ax - away_cx[:, None]) ** 2 + (ay - away_cy[:, None]) ** 2), axis=1)
+
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     np.savez_compressed(CACHE,
                         ball_x=ball[:, 0], ball_y=ball[:, 1],
@@ -79,7 +92,8 @@ def build():
                         n_home3=n_home3, n_away3=n_away3,
                         mean_speed=np.nanmean(ps, axis=1),
                         n_players=np.sum(~np.isnan(px), axis=1),
-                        ball_speed=ball_speed)
+                        ball_speed=ball_speed,
+                        home_cx=home_cx, away_cx=away_cx, home_spread=home_spread, away_spread=away_spread)
     return CACHE
 
 
