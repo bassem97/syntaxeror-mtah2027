@@ -21,7 +21,7 @@
   button.H { border-color: var(--h); } button.A { border-color: var(--a); } button.D { border-color: var(--d); }
   input[type=number], input[type=text] { background: #0d1117; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 110px; }
   canvas { width: 100%; height: 70px; display: block; background: #0d1117; border: 1px solid var(--line); border-radius: 6px; }
-  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; max-height: calc(100vh - 100px); overflow: auto; }
+  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; max-height: calc(100vh - 100px); overflow: auto; position: relative; }
   aside h2 { font-size: 13px; color: var(--mute); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
   #marks div { display: flex; justify-content: space-between; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
   #marks div:hover { background: #2d343b; }
@@ -225,7 +225,12 @@
     if (row === curRow && !force) return;
     if (curRow) curRow.el.classList.remove('cur');
     curRow = row;
-    if (row) { row.el.classList.add('cur'); row.el.scrollIntoView({ block: 'center' }); }
+    if (row) {
+      row.el.classList.add('cur');
+      // scroll the list box only, never the page
+      const box = marksEl.parentElement;
+      box.scrollTop = row.el.offsetTop - box.clientHeight / 2 + row.el.offsetHeight / 2;
+    }
   }
 
   function sizeCanvas() { tl.width = tl.clientWidth * devicePixelRatio; tl.height = tl.clientHeight * devicePixelRatio; }
@@ -261,9 +266,9 @@
     if (wb >= f0 && wb <= f1) ctx.fillRect(x(wb) - 1, 0, 2, H);
   }
 
-  document.querySelectorAll('[data-mark]').forEach(b => b.onclick = () => mark(b.dataset.mark));
-  document.getElementById('undo').onclick = undo;
-  document.getElementById('clear').onclick = () => { marks.clear(); save(); render(); };
+  document.querySelectorAll('[data-mark]').forEach(b => b.onclick = () => { mark(b.dataset.mark); b.blur(); });
+  document.getElementById('undo').onclick = e => { undo(); e.target.blur(); };
+  document.getElementById('clear').onclick = e => { marks.clear(); save(); render(); e.target.blur(); };
   document.getElementById('export').onclick = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([marksCsv()], { type: 'text/csv' }));
@@ -278,6 +283,7 @@
 
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
+    if (e.target.tagName === 'BUTTON') e.target.blur();
     // a held key auto-repeats; a mark per repeated frame is never what anyone means
     if (e.repeat && !e.key.startsWith('Arrow')) { e.preventDefault(); return; }
     const big = e.shiftKey ? 10 : 1;
