@@ -43,8 +43,10 @@ def gaussian_target(n, h, w, centres, sigma=1.5, device="cpu"):
     """Heatmap targets at stride resolution; centres in stride units, (-1, -1) = no ball."""
     ys = torch.arange(h, device=device).view(1, h, 1).float()
     xs = torch.arange(w, device=device).view(1, 1, w).float()
-    cx = centres[:, 0].view(n, 1, 1)
-    cy = centres[:, 1].view(n, 1, 1)
+    # centres snap to a grid cell so every ball has exactly one pixel at 1.0: the focal loss
+    # treats only those as positives, and a fractional centre would leave a crop with none
+    cx = torch.round(centres[:, 0]).clamp(0, w - 1).view(n, 1, 1)
+    cy = torch.round(centres[:, 1]).clamp(0, h - 1).view(n, 1, 1)
     g = torch.exp(-((xs - cx) ** 2 + (ys - cy) ** 2) / (2 * sigma ** 2))
     g[(centres[:, 0] < 0)] = 0.0
     return g.unsqueeze(1)
