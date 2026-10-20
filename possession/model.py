@@ -235,7 +235,7 @@ def viterbi(score, team_cost, dead_cost, dead_exit=None):
 
 
 def build(p):
-    f = load()
+    f = load(p.get("ball", "tracker"))
     n = len(f["ball_x"])
     score = emissions(f, p)
     labels = np.full(n, "X", dtype="<U1")
@@ -270,6 +270,7 @@ def write(labels, path):
 def argparser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", default="SyntaxEror")
+    ap.add_argument("--ball", default="tracker", choices=["tracker", "detector"], help="which ball track the features use")
     ap.add_argument("--out", default=os.path.join(ROOT, "out"), help="output folder")
     ap.add_argument("--team-cost", type=float, default=45)
     ap.add_argument("--dead-cost", type=float, default=30, help="keep >= team-cost / 2, or a team switch routes through a 1-frame D")

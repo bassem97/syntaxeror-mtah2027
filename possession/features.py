@@ -2,7 +2,8 @@
 
 Run once (about a minute), then everything else loads the cache in milliseconds:
 
-    python -m possession.features
+    python -m possession.features                       # tracker ball
+    python -m possession.features --variant detector    # + detector where the tracker lost it
 
 Arrays, all length n_frames (video frame index, 0-based):
   ball_x, ball_y      normalised 0-1, NaN when the ball is not tracked
@@ -22,7 +23,12 @@ import numpy as np
 from .games import DATA_DIR, GAME, GAMES, require, source_frames
 
 CACHE = os.path.join(DATA_DIR, "cache", "tactical_features.npz")
+DETECTOR = os.path.join(DATA_DIR, "cache", "ball_detector.npz")
 NEAR_M = 3.0
+
+
+def cache_path(variant):
+    return CACHE if variant == "tracker" else CACHE.replace(".npz", "_{}.npz".format(variant))
 
 
 def team_of_each_track(meta_path):
@@ -46,7 +52,9 @@ def parse_atd(raw_path, n_slots):
     return frames, players, ball
 
 
-def build():
+def build(variant="tracker", score_min=0.5):
+    """variant "tracker": the ball as the ATD tracks it. "detector": the same, with the frames the
+    tracker lost filled from vision/infer.py wherever the detector is confident (score_min)."""
     meta_path, raw_path = require(["atd_meta", "atd_raw"])
     n = source_frames("tactical")
     length, width = GAMES[GAME]["pitch"]
@@ -54,6 +62,13 @@ def build():
 
     frames, players, ball = parse_atd(raw_path, len(is_home))
     assert len(frames) == n and frames[0] == 0 and frames[-1] == n - 1
+    ball = ball.copy()
+    ball_src = np.where(np.isnan(ball[:, 0]), 0, 1).astype(np.int8)  # 0 none, 1 tracker, 2 detector
+    if variant == "detector":
+        d = np.load(DETECTOR)
+        fill = np.isnan(ball[:, 0]) & (d["score"] >= score_min) & ~np.isnan(d["x"])
+        ball[fill, 0], ball[fill, 1] = d["x"][fill], d["y"][fill]
+        ball_src[fill] = 2
 
     px = players[:, :, 0] * length
     py = players[:, :, 1] * width
@@ -85,31 +100,40 @@ def build():
     home_spread = np.nanmean(np.sqrt((hx - home_cx[:, None]) ** 2 + (hy - home_cy[:, None]) ** 2), axis=1)
     away_spread = np.nanmean(np.sqrt((ax - away_cx[:, None]) ** 2 + (ay - away_cy[:, None]) ** 2), axis=1)
 
-    os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-    np.savez_compressed(CACHE,
-                        ball_x=ball[:, 0], ball_y=ball[:, 1],
+    out = cache_path(variant)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    np.savez_compressed(out,
+                        ball_x=ball[:, 0], ball_y=ball[:, 1], ball_src=ball_src,
                         d_home=d_home, d_away=d_away,
                         n_home3=n_home3, n_away3=n_away3,
                         mean_speed=np.nanmean(ps, axis=1),
                         n_players=np.sum(~np.isnan(px), axis=1),
                         ball_speed=ball_speed,
                         home_cx=home_cx, away_cx=away_cx, home_spread=home_spread, away_spread=away_spread)
-    return CACHE
+    return out
 
 
-def load():
-    if not os.path.isfile(CACHE):
-        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-        build()
-    return dict(np.load(CACHE))
+def load(variant="tracker"):
+    path = cache_path(variant)
+    if not os.path.isfile(path):
+        build(variant)
+    return dict(np.load(path))
 
 
 if __name__ == "__main__":
+    import argparse
     import warnings
     warnings.simplefilter("ignore")  # nanmean over empty frames at halftime
-    path = build()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--variant", default="tracker", choices=["tracker", "detector"])
+    ap.add_argument("--score-min", type=float, default=0.5, help="detector confidence needed to fill a frame")
+    args = ap.parse_args()
+    path = build(args.variant, args.score_min)
     f = dict(np.load(path))
     vis = ~np.isnan(f["ball_x"])
     print("cached", path)
+    if args.variant == "detector":
+        print("ball from tracker {:.1f}%, from detector {:.1f}%, none {:.1f}%".format(
+            *(100 * np.mean(f["ball_src"] == k) for k in (1, 2, 0))))
     print("ball visible {:.1f}%  mean players {:.1f}".format(100 * vis.mean(), np.nanmean(f["n_players"])))
     print("median d_home {:.2f} m  d_away {:.2f} m".format(np.nanmedian(f["d_home"]), np.nanmedian(f["d_away"])))
