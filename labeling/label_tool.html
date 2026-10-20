@@ -67,7 +67,7 @@
     <canvas id="tl"></canvas>
     <div class="help">
       <p><kbd>Enter</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 1 frame · <kbd>Shift</kbd>+arrows 10 frames · <kbd>↑</kbd><kbd>↓</kbd> 5 s · <kbd>,</kbd><kbd>.</kbd> slower/faster</p>
-      <p><kbd>Q</kbd> Barça · <kbd>L</kbd> Athletic · <kbd>Space</kbd> dead ball, from the current frame on (also <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>). A press overrides what was marked after it until the next change; <kbd>Shift</kbd>+key moves the start of the current state to here · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
+      <p><kbd>Q</kbd> Barça · <kbd>L</kbd> Athletic · <kbd>Space</kbd> dead ball, from the current frame on (also <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>). A press sets the state from here on and clears every later mark; <kbd>Shift</kbd>+key sets it here but keeps the later marks · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
       <p>Timeline shows ±30 s: your marks on top, reference tracks below. Click anywhere on it to jump to that frame.</p>
     </div>
   </section>
@@ -199,26 +199,17 @@
     let prev = null;
     for (const k of sortedMarks()) { const l = marks.get(k); if (l === prev) marks.delete(k); else prev = l; }
   }
-  // A press means "from this frame on, this state", overriding what was there:
-  //  - a different state: it holds until the next change already marked after here, and any
-  //    marks of the old state in between go away
-  //  - the state already in force: nothing happens (so a habit of re-pressing is harmless);
-  //    with Shift held, the current run now starts here and the frames before it fall back
-  //    to the earlier state, which is how a boundary is moved
-  function mark(l, move) {
-    normalize();
-    const ks = sortedMarks();
-    const before = ks.filter(k => k <= frame);
-    const start = before.length ? before[before.length - 1] : null;
-    const old = start === null ? 'X' : marks.get(start);
-    if (l === old) {
-      if (!move || start === null || start === frame) { status.textContent = `already ${l} from ${start} (Shift+key moves its start here)`; return; }
-      marks.delete(start);
-      marks.set(frame, l);
-      status.textContent = `${l} now starts at ${frame} (was ${start})`;
-    } else {
-      marks.set(frame, l);
+  // A press means "from this frame on, this state, and forget everything I marked after here":
+  // every later mark is dropped, because going back means re-watching from this point.
+  // With Shift held only this frame's mark is set and later marks are kept (insert a change
+  // without wiping what follows).
+  function mark(l, keepLater) {
+    if (!keepLater) {
+      const dropped = sortedMarks().filter(k => k > frame);
+      dropped.forEach(k => marks.delete(k));
+      if (dropped.length) status.textContent = `${l} from ${frame}; ${dropped.length} later mark(s) cleared`;
     }
+    marks.set(frame, l);
     normalize(); save(); render();
   }
   function undo() {

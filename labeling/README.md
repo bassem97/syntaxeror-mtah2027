@@ -44,10 +44,10 @@ a specific file instead.
 
 Keys: `Enter` plays and pauses, arrows step 1 frame (Shift: 10), up/down jump 5 s, `,` `.` change speed.
 `Q` Barça, `L` Athletic, `Space` dead ball (also `H` `A` `D` or `1` `2` `3`) mean "from this frame
-on, this state". A state runs until the next mark. Going back and pressing overrides what was
-marked: a different state replaces the old one up to the next change you had marked. Pressing the
-state already in force does nothing; `Shift` + key moves its start to the current frame. `Backspace`
-deletes the mark at or before the cursor. The export button is only needed when
+on, this state", and every mark after the current frame is cleared, because going back means
+re-watching from there. `Shift` + key sets the state at the current frame but keeps the later
+marks (insert a change without wiping what follows). `Backspace` deletes the mark at or before the
+cursor. The export button is only needed when
 the page is opened as a file without the server.
 
 Check the clock once: at frame 11185 the first-half kick-off is being struck, and at 113742 the
