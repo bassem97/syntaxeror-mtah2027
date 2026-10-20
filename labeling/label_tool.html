@@ -170,6 +170,7 @@
     rememberPosition();
     if (full) { render(); return; }
     frameEl.textContent = frame; clockEl.textContent = fmt(frame) + '  current: ' + labelAt(frame);
+    followCursor(false);
     const now = performance.now();
     if (now - lastDraw > 100) { lastDraw = now; draw(); }
   }
@@ -194,20 +195,37 @@
     marks.delete(ks[ks.length - 1]); save(); render();
   }
 
+  let rows = [];        // [{k, el}] for the marks listed (inside the window), sorted
+  let curRow = null;
+  function windowRange() { const [a, b] = windowEl.value.split('-').map(Number); return [a || 0, b || N - 1]; }
   function render() {
     frameEl.textContent = frame; clockEl.textContent = fmt(frame) + '  current: ' + labelAt(frame);
-    const ks = sortedMarks(); countEl.textContent = `(${ks.length})`;
+    const ks = sortedMarks();
+    const [wa, wb] = windowRange();
+    const inside = ks.filter(k => k >= wa && k <= wb);
+    countEl.textContent = `(${inside.length} in window${ks.length > inside.length ? `, ${ks.length - inside.length} outside` : ''})`;
     marksEl.innerHTML = '';
-    let cur = null;
-    for (const k of ks) {
+    rows = []; curRow = null;
+    for (const k of inside) {
       const d = document.createElement('div');
       d.innerHTML = `<span>${k} <span class="help">${fmt(k)}</span></span><span class="lab-${marks.get(k)}">${marks.get(k)}</span>`;
       d.onclick = () => seek(k);
-      if (k <= frame) cur = d;
       marksEl.appendChild(d);
+      rows.push({ k, el: d });
     }
-    if (cur) { cur.classList.add('cur'); if (v.paused) cur.scrollIntoView({ block: 'nearest' }); }
+    followCursor(true);
     draw();
+  }
+  // Highlight the mark in force at the current frame and keep it in view. Cheap enough to run
+  // on every frame while playing: binary search plus one class change when it moves.
+  function followCursor(force) {
+    let lo = 0, hi = rows.length - 1, idx = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (rows[m].k <= frame) { idx = m; lo = m + 1; } else hi = m - 1; }
+    const row = idx >= 0 ? rows[idx] : null;
+    if (row === curRow && !force) return;
+    if (curRow) curRow.el.classList.remove('cur');
+    curRow = row;
+    if (row) { row.el.classList.add('cur'); row.el.scrollIntoView({ block: 'center' }); }
   }
 
   function sizeCanvas() { tl.width = tl.clientWidth * devicePixelRatio; tl.height = tl.clientHeight * devicePixelRatio; }
@@ -255,11 +273,13 @@
   windowEl.addEventListener('change', () => {
     // each window keeps its own marks file on the server
     if (served) fetch(marksUrl()).then(r => r.ok ? r.text() : '').then(t => { marks = new Map(); if (t) parseMarks(t); render(); });
-    else draw();
+    else render();
   });
 
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
+    // a held key auto-repeats; a mark per repeated frame is never what anyone means
+    if (e.repeat && !e.key.startsWith('Arrow')) { e.preventDefault(); return; }
     const big = e.shiftKey ? 10 : 1;
     switch (e.key) {
       case 'ArrowLeft': step(-big); break;
