@@ -100,6 +100,34 @@ kick from standstill, so the hold ran for half a minute. Distance-weighted contr
 radius: it only lengthened possessions. Team shape on every frame: it is a slow signal and merged
 possessions, so it is restricted to frames without a ball.
 
+### A second ball track from the video (work in progress)
+
+The tracker loses the ball on 41% of graded frames, and those are the frames that matter: duels,
+crowded boxes, aerial balls. We train a small ball detector on the tactical video and use it only
+where the tracker has nothing. Everything is in `vision/`.
+
+- **Labels for free.** On the 113,000 frames where the tracker has the ball, projecting it through
+  the frame's homography gives a pixel position. A numeric check against the image (the ball is
+  the strongest small bright blob on grass) shows the projection is unbiased but noisy: on
+  isolated balls it is more than 8 px off about 40% of the time. Labels snap to the blob where one
+  is clear, otherwise keep the projection.
+- **Detector.** A 300k-parameter fully convolutional heatmap network in plain PyTorch, stride 4,
+  trained on 256 px crops (14k with a ball, 14k without, plus 20k hard negatives mined from the
+  detector's own false peaks: socks, boots, line crossings). Runs on full 1080p frames and emits
+  the five strongest peaks per frame.
+- **Gap filling.** The tracker knows the ball before and after every gap, so the detector's peaks
+  are tracked through the gap by dynamic programming with a motion-smoothness cost, anchored at
+  both ends. On hidden tracked stretches it recovers 85% of frames, 82% of them within 32 px, about
+  a metre. Long gaps of 15 to 30 s are almost all stoppages; the valuable gaps are the 5 to 10 s
+  ones in live play.
+- **Effect.** With the filled ball on the internal validation set (13.5 min, 34 possessions):
+  macroF1 0.829 to 0.851, spellF1 0.491 to 0.520. On the public window spellF1 0.546 to 0.563 and
+  macroF1 0.890 to 0.873. A gain, within the noise of 34 possessions.
+
+What limits it is label quality: the detector's localisation plateaus at the first epoch whatever
+the training set, which is the signature of labels that are not on the ball. A human check of the
+auto-labels is the next step; a few hundred hand-clicked balls would settle it.
+
 ## 3. Possession rules implemented
 
 - A change of possession needs the other team to gain control. Operationally: a touch by an
