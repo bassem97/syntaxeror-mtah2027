@@ -63,7 +63,7 @@
     <div class="help">
       <p><kbd>Enter</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 1 frame · <kbd>Shift</kbd>+arrows 10 frames · <kbd>↑</kbd><kbd>↓</kbd> 5 s · <kbd>,</kbd><kbd>.</kbd> slower/faster</p>
       <p><kbd>Q</kbd> Barça · <kbd>L</kbd> Athletic · <kbd>Space</kbd> dead ball, from the current frame on (also <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
-      <p>Timeline shows ±30 s: your marks on top, reference tracks below (load the public ground truth and the model output to compare).</p>
+      <p>Timeline shows ±30 s: your marks on top, reference tracks below. Click anywhere on it to jump to that frame.</p>
     </div>
   </section>
   <aside>
@@ -309,6 +309,17 @@
     e.preventDefault();
   });
   window.addEventListener('resize', () => { sizeCanvas(); draw(); });
+  // click (or drag) on the timeline to jump there; it always shows +/- 30 s around the cursor
+  function timelineFrame(e) {
+    const r = tl.getBoundingClientRect();
+    const span = 30 * FPS;
+    return Math.round(frame - span + (e.clientX - r.left) / r.width * 2 * span);
+  }
+  let dragging = false;
+  tl.addEventListener('mousedown', e => { dragging = true; seek(timelineFrame(e)); e.preventDefault(); });
+  tl.addEventListener('mousemove', e => { if (dragging) seek(timelineFrame(e)); });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  tl.style.cursor = 'pointer';
   render();
 })();
 </script>
