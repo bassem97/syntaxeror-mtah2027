@@ -1,0 +1,18 @@
+# The match data is licensed for the competition only and must never be published.
+data/
+cache/
+*.mp4
+*_atd.txt
+*_atd.xml
+*_homography.csv
+*_smart_tagging.xml
+# Generated submissions: a good one is a copy of the ground truth.
+out/
+*.csv
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
