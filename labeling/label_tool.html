@@ -144,11 +144,30 @@
   // frame-accurate position: prefer the presented frame's media time. While playing only the
   // cheap parts update (counter + timeline, at most ~10 times a second); the marks list is
   // rebuilt only when marks change or playback stops, so keys stay responsive.
-  let lastDraw = 0;
+  let lastDraw = 0, lastPosSave = 0;
+  const POS_KEY = 'possession-position';
+  function rememberPosition() {
+    const now = performance.now();
+    if (now - lastPosSave < 1000) return;
+    lastPosSave = now;
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ frame, window: windowEl.value, rate })); } catch (e) {}
+  }
+  v.addEventListener('loadedmetadata', () => {
+    // come back where you were after a reload
+    try {
+      const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+      if (p && p.frame > 0) {
+        if (p.window) windowEl.value = p.window;
+        if (p.rate) { rate = p.rate; v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; }
+        seek(p.frame);
+      }
+    } catch (e) {}
+  });
   function setFrameFromTime(t, full) {
     const n = Math.max(0, Math.min(N - 1, Math.floor(t * FPS + 1e-4)));
     if (n === frame && !full) return;
     frame = n;
+    rememberPosition();
     if (full) { render(); return; }
     frameEl.textContent = frame; clockEl.textContent = fmt(frame) + '  current: ' + labelAt(frame);
     const now = performance.now();
@@ -161,7 +180,7 @@
   v.addEventListener('pause', () => setFrameFromTime(v.currentTime, true));
   v.addEventListener('seeked', () => setFrameFromTime(v.currentTime, true));
 
-  function seek(n) { n = Math.max(0, Math.min(N - 1, n)); v.pause(); v.currentTime = (n + 0.5) / FPS; frame = n; render(); }
+  function seek(n) { n = Math.max(0, Math.min(N - 1, n)); v.pause(); v.currentTime = (n + 0.5) / FPS; frame = n; lastPosSave = 0; rememberPosition(); render(); }
   function step(d) { seek(frame + d); }
 
   function fmt(n) { const s = n / FPS; const m = Math.floor(s / 60); return `${m}:${(s - m * 60).toFixed(2).padStart(5, '0')}`; }
