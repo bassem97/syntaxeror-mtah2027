@@ -79,17 +79,24 @@ def write(gt, path):
         fh.writelines("{},{}\n".format(i, l) for i, l in enumerate(gt))
 
 
-def summary(gt):
+def summary(gt, short_frames=10):
     graded = gt != "X"
     counts = {l: int((gt == l).sum()) for l in "HAD"}
-    runs = 0
-    prev = "X"
-    for l in gt:
-        if l in "HA" and l != prev:
-            runs += 1
-        prev = l
-    return "{} graded frames ({:.1f} min), H {H} A {A} D {D}, {} possessions".format(
+    runs, short = 0, []
+    start, prev = 0, "X"
+    for i, l in enumerate(gt):
+        if l != prev:
+            if prev != "X" and i - start < short_frames:
+                short.append("{} {} x{}".format(start, prev, i - start))
+            if l in "HA":
+                runs += 1
+            start, prev = i, l
+    text = "{} graded frames ({:.1f} min), H {H} A {A} D {D}, {} possessions".format(
         graded.sum(), graded.sum() / 25 / 60, runs, **counts)
+    if short:
+        text += "\n  states shorter than {} frames, probably double presses -- review: {}".format(
+            short_frames, ", ".join(short))
+    return text
 
 
 def self_check():
