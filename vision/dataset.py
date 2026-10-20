@@ -1,6 +1,6 @@
 """Build the ball-detector training set: crops around the auto-labelled ball, plus crops without it.
 
-Frames are decoded once, sequentially, through ffmpeg (random seeks in a 5 GB file are slow).
+Frames are decoded once, sequentially, in-process with PyAV (random seeks in a 5 GB file are slow).
 Every `--every` labelled frame yields one positive crop (ball somewhere inside, position
 jittered) and one negative crop (same frame, far from the ball). The label is refined from the
 projected point to the strongest ball-like blob within a few pixels (vision/check_labels.py shows
@@ -15,7 +15,6 @@ Output: data/cache/crops/{pos,neg}/<frame>.jpg and data/cache/crops/labels.csv
 import argparse
 import csv
 import os
-import subprocess
 import sys
 
 import cv2
@@ -32,29 +31,26 @@ WIDTH, HEIGHT = 1920, 1080
 CROPS = os.path.join(DATA_DIR, "cache", "crops")
 
 
-def frames(video, step=1):
-    """Yield (frame_index, BGR image) for every `step`-th frame, decoded sequentially by ffmpeg.
+def frames(video, step=1, start=0, end=None):
+    """(frame_index, BGR ndarray) for every `step`-th frame, decoded in-process with PyAV.
 
-    ffmpeg drops the frames in between, so the pipe carries 1/step of the raw video: a full 1080p
-    frame is 6 MB and moving all 199k of them through Python is what makes this slow."""
-    cmd = ["ffmpeg", "-v", "error", "-i", video]
-    if step > 1:
-        cmd += ["-vf", r"select=not(mod(n,{}))".format(step), "-vsync", "0"]
-    cmd += ["-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=10 ** 8)
-    size = WIDTH * HEIGHT * 3
-    i = 0
+    In-process decoding runs at about 500 fps on this machine; piping raw frames out of ffmpeg
+    managed 13, because a 1080p frame is 6 MB."""
+    import av
+    c = av.open(video)
+    s = c.streams.video[0]
+    s.thread_type = "AUTO"
     try:
-        while True:
-            buf = proc.stdout.read(size)
-            if len(buf) < size:
-                break
-            yield i * step, np.frombuffer(buf, np.uint8).reshape(HEIGHT, WIDTH, 3)
+        i = -1
+        for fr in c.decode(s):
             i += 1
-    finally:  # the consumer may stop early; do not leave ffmpeg decoding the rest of the match
-        proc.kill()
-        proc.stdout.close()
-        proc.wait()
+            if i < start or i % step:
+                continue
+            if end is not None and i > end:
+                break
+            yield i, fr.to_ndarray(format="bgr24")
+    finally:
+        c.close()
 
 
 def crop_at(img, cx, cy, size):
