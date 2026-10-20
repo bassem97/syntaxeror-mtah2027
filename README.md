@@ -56,6 +56,13 @@ possession/
   touches.py                ball touches from velocity changes, attributed to the nearest team
   smart_tagging.py          Smart Tagging XML reader (vendored from the organisers' repo, MIT)
   games.py                  match constants and asset paths (vendored, MIT; one path edit)
+vision/                     ball detector (work in progress, needs requirements-vision.txt and a GPU)
+  autolabels.py             tracked ball -> pixel labels through the homography
+  check_labels.py           numeric check of those labels against the image
+  dataset.py                crops around the ball and without it
+  model.py, train.py        small CenterNet-style heatmap detector and its training
+  infer.py                  second ball track for the whole match
+labeling/                   hand-labelling kit for the internal validation set (see its README)
 analysis/
   counts.py                 full-match possession / stoppage counts of a submission
   diag.py                   per-segment view of a submission against the public ground truth
