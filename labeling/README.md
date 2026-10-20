@@ -42,8 +42,8 @@ half-resolution copy with the same 199,319 frames and a keyframe every half seco
 backwards is instant. The ffmpeg command that makes it is in `serve.py`; pass `--video` to serve
 a specific file instead.
 
-Keys: arrows step 1 frame (Shift: 10), up/down jump 5 s, space plays, `,` `.` change speed.
-`J` `K` `L` (or `1` `2` `3`, or `H` `A` `D`) mark the **start** of Barça / Athletic / dead ball at the current frame. A state runs until the next
+Keys: `Enter` plays and pauses, arrows step 1 frame (Shift: 10), up/down jump 5 s, `,` `.` change speed.
+`Q` Barça, `L` Athletic, `Space` dead ball (also `H` `A` `D` or `1` `2` `3`) mark the **start** of that state at the current frame. A state runs until the next
 mark. `Backspace` deletes the mark at or before the cursor. The export button is only needed when
 the page is opened as a file without the server.
 

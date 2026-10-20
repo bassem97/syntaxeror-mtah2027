@@ -51,9 +51,9 @@
       <span id="speed" class="help">speed 1×</span>
     </div>
     <div class="bar">
-      <button class="H" data-mark="H">J / 1 · Barça (H)</button>
-      <button class="A" data-mark="A">K / 2 · Athletic (A)</button>
-      <button class="D" data-mark="D">L / 3 · dead ball (D)</button>
+      <button class="H" data-mark="H">Q · Barça (H)</button>
+      <button class="A" data-mark="A">L · Athletic (A)</button>
+      <button class="D" data-mark="D">Space · dead ball (D)</button>
       <button data-mark="X">0 · not labelled (X)</button>
       <button id="undo">delete mark here</button>
       <button id="export">export marks CSV</button>
@@ -61,8 +61,8 @@
     </div>
     <canvas id="tl"></canvas>
     <div class="help">
-      <p><kbd>←</kbd><kbd>→</kbd> 1 frame · <kbd>Shift</kbd>+arrows 10 frames · <kbd>↑</kbd><kbd>↓</kbd> 5 s · <kbd>Space</kbd> play/pause · <kbd>,</kbd><kbd>.</kbd> slower/faster</p>
-      <p><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> (or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, or <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd>) = Barça / Athletic / dead ball from the current frame on · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
+      <p><kbd>Enter</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 1 frame · <kbd>Shift</kbd>+arrows 10 frames · <kbd>↑</kbd><kbd>↓</kbd> 5 s · <kbd>,</kbd><kbd>.</kbd> slower/faster</p>
+      <p><kbd>Q</kbd> Barça · <kbd>L</kbd> Athletic · <kbd>Space</kbd> dead ball, from the current frame on (also <kbd>H</kbd> <kbd>A</kbd> <kbd>D</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) · <kbd>Backspace</kbd> delete the mark at or before the current frame · <kbd>[</kbd> <kbd>]</kbd> previous/next mark</p>
       <p>Timeline shows ±30 s: your marks on top, reference tracks below (load the public ground truth and the model output to compare).</p>
     </div>
   </section>
@@ -247,12 +247,14 @@
       case 'ArrowRight': step(big); break;
       case 'ArrowUp': step(5 * FPS); break;
       case 'ArrowDown': step(-5 * FPS); break;
-      case ' ': if (v.paused) v.play(); else v.pause(); break;
+      case 'Enter': if (v.paused) v.play(); else v.pause(); break;
+      case ' ': mark('D'); break;
+      case 'q': case 'Q': mark('H'); break;
       case ',': rate = Math.max(0.1, rate / 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
       case '.': rate = Math.min(4, rate * 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
       case 'h': case 'H': case 'j': case 'J': case '1': mark('H'); break;
-      case 'a': case 'A': case 'k': case 'K': case '2': mark('A'); break;
-      case 'd': case 'D': case 'l': case 'L': case '3': mark('D'); break;
+      case 'a': case 'A': case 'k': case 'K': case 'l': case 'L': case '2': mark('A'); break;
+      case 'd': case 'D': case '3': mark('D'); break;
       case 'x': case 'X': case '0': mark('X'); break;
       case 'Backspace': undo(); break;
       case '[': { const ks = sortedMarks().filter(k => k < frame); if (ks.length) seek(ks[ks.length - 1]); break; }
