@@ -25,6 +25,7 @@
   button:hover { background: #2d343b; }
   button.H { border-color: var(--h); } button.A { border-color: var(--a); } button.D { border-color: var(--d); }
   input[type=number], input[type=text] { background: #0d1117; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 110px; }
+  select { background: #0d1117; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; }
   canvas { width: 100%; height: 70px; display: block; background: #0d1117; border: 1px solid var(--line); border-radius: 6px; }
   aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 0; overflow: auto; position: relative; }
   aside h2 { font-size: 13px; color: var(--mute); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
@@ -54,7 +55,11 @@
       <span id="frame">—</span><span id="clock"></span>
       <span>go to <input type="number" id="goto" min="0" max="199318" placeholder="frame"></span>
       <span>window <input type="text" id="window" value="11185-18684" title="first-last frame of the window you are labelling"></span>
-      <span id="speed" class="help">speed 1×</span>
+      <span class="help">speed <select id="speed-select">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+        <option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option>
+        <option value="1.75">1.75×</option><option value="2">2×</option>
+      </select></span><span id="speed" hidden></span>
     </div>
     <div class="bar">
       <button class="H" data-mark="H">Q · Barça (H)</button>
@@ -164,7 +169,7 @@
       const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
       if (p && p.frame > 0) {
         if (p.window) windowEl.value = p.window;
-        if (p.rate) { rate = p.rate; v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; }
+        if (p.rate) setRate(p.rate);
         seek(p.frame);
       }
     } catch (e) {}
@@ -298,6 +303,10 @@
     a.href = URL.createObjectURL(new Blob([marksCsv()], { type: 'text/csv' }));
     a.download = `marks_${windowEl.value.replace('-', '_')}.csv`; a.click();
   };
+  const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const speedSel = document.getElementById('speed-select');
+  function setRate(r) { rate = r; v.playbackRate = r; speedSel.value = String(r); rememberPosition(); }
+  speedSel.addEventListener('change', e => { setRate(+e.target.value); e.target.blur(); });
   document.getElementById('goto').addEventListener('change', e => { seek(+e.target.value); e.target.blur(); });
   windowEl.addEventListener('change', () => {
     // each window keeps its own marks file on the server
@@ -306,7 +315,7 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     if (e.target.tagName === 'BUTTON') e.target.blur();
     // a held key auto-repeats; a mark per repeated frame is never what anyone means
     if (e.repeat && !e.key.startsWith('Arrow')) { e.preventDefault(); return; }
@@ -319,8 +328,8 @@
       case 'Enter': if (v.paused) v.play(); else v.pause(); break;
       case ' ': mark('D', e.shiftKey); break;
       case 'q': case 'Q': mark('H', e.shiftKey); break;
-      case ',': rate = Math.max(0.1, rate / 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
-      case '.': rate = Math.min(4, rate * 2); v.playbackRate = rate; document.getElementById('speed').textContent = `speed ${rate}×`; break;
+      case ',': setRate(SPEEDS[Math.max(0, SPEEDS.indexOf(rate) - 1)] || rate); break;
+      case '.': setRate(SPEEDS[Math.min(SPEEDS.length - 1, SPEEDS.indexOf(rate) + 1)] || rate); break;
       case 'h': case 'H': case 'j': case 'J': case '1': case '!': mark('H', e.shiftKey); break;
       case 'a': case 'A': case 'k': case 'K': case 'l': case 'L': case '2': case '@': mark('A', e.shiftKey); break;
       case 'd': case 'D': case '3': case '#': mark('D', e.shiftKey); break;
