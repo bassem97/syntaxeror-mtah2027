@@ -53,6 +53,24 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(404)
         return self.send_error(404)
 
+    def do_POST(self):
+        # one ball click: "frame,u,v" appended to labeling/data/clicks.csv
+        if self.path != "/clicks":
+            return self.send_error(404)
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("ascii", "ignore").strip()
+        parts = body.split(",")
+        if len(parts) != 3 or not all(p.strip().lstrip("-").isdigit() for p in parts):
+            return self.send_error(400)
+        os.makedirs(DATA, exist_ok=True)
+        path = os.path.join(DATA, "clicks.csv")
+        new = not os.path.isfile(path)
+        with open(path, "a", newline="") as fh:
+            if new:
+                fh.write("frame,u,v\n")
+            fh.write(body + "\n")
+        self.send_response(204)
+        self.end_headers()
+
     def do_PUT(self):
         path = self.marks_path()
         if not path:

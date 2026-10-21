@@ -54,6 +54,19 @@ the page is opened as a file without the server.
 Check the clock once: at frame 11185 the first-half kick-off is being struck, and at 113742 the
 second-half one. If either is off by more than a frame or two, stop and report it.
 
+## Ball clicks (a test set for the ball detector)
+
+The detector can only be trained where the tracker already saw the ball, so it needs a test set
+on the frames the tracker lost. Press `B` in the tool to enter ball-click mode (the cursor becomes
+a crosshair), then click the ball in the video; each click saves `frame,u,v` in 1920x1080 pixels
+to `labeling/data/clicks.csv`. `B` again leaves the mode. Pick frames where the model output and
+the public truth disagree, or stretches the tracker lost, and click the ball on perhaps 300
+frames spread over the match; one click per frame is enough. Score the detector on them with:
+
+```bash
+python vision/eval_clicks.py
+```
+
 ## Convention (match the public truth, not your intuition)
 
 - `H` Barcelona, `A` Athletic, `D` dead ball. Nothing else on graded frames.

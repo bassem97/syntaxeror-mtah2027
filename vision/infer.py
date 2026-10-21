@@ -63,6 +63,7 @@ def main():
     ap.add_argument("--weights", default=WEIGHTS)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--gpu-share", type=float, default=1.0, help="fraction of the GPU to use; the rest is left to the desktop")
+    ap.add_argument("--only-missing", action="store_true", help="run the network only on frames where the tracker has no ball (the gap filler needs nothing else); decoding still covers every frame")
     args = ap.parse_args()
     throttle = Throttle(args.gpu_share)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -87,6 +88,11 @@ def main():
         if "ku" in d:
             ku, kv, ks = d["ku"], d["kv"], d["ks"]
 
+    wanted = None
+    if args.only_missing:
+        from vision.autolabels import load_labels
+        wanted = np.isnan(load_labels()[0])
+        print("only-missing: {} of {} frames in range".format(int(wanted[args.start:args.end + 1].sum()), args.end - args.start + 1))
     t0 = time.time()
     batch, idx = [], []
     done = 0
@@ -107,6 +113,8 @@ def main():
         throttle.step()
 
     for i, img in decode(asset_paths()["video"], args.start, args.end):
+        if wanted is not None and not wanted[i]:
+            continue
         batch.append(img)
         idx.append(i)
         if len(batch) == args.batch:
