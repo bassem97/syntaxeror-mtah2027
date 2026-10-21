@@ -162,7 +162,7 @@ def main(argv=None):
         import glob
         files = sorted(glob.glob(args.model + "_*.txt"))
         # read as text and normalise newlines: a CRLF checkout breaks LightGBM's own file parser
-        boosters = [lgb.Booster(model_str=open(m, newline="").read().replace("
+        boosters = [lgb.Booster(model_str=open(m, newline="").read().replace("
 ", "
 ")) for m in files]
         proba = np.mean([b.predict(df.values) for b in boosters], axis=0)
