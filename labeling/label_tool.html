@@ -203,9 +203,16 @@
   function labelAt(n) { let l = 'X'; for (const k of sortedMarks()) { if (k <= n) l = marks.get(k); else break; } return l; }
 
   // Marks are changes of state, so two consecutive marks with the same label are one mark.
+  // Collapse repeated labels, but only inside the current window: a mark at the start of
+  // another window may repeat the label before it, and must survive labelling this one.
   function normalize() {
+    const [wa, wb] = windowRange();
     let prev = null;
-    for (const k of sortedMarks()) { const l = marks.get(k); if (l === prev) marks.delete(k); else prev = l; }
+    for (const k of sortedMarks()) {
+      const l = marks.get(k);
+      if (k < wa || k > wb) { prev = null; continue; }
+      if (l === prev) marks.delete(k); else prev = l;
+    }
   }
   // A press means "from this frame on, this state, and forget everything I marked after here":
   // every later mark inside the window is dropped, because going back means re-watching from
