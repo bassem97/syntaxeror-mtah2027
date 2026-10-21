@@ -189,6 +189,7 @@ def simulate(n_gaps, length_frames, p, seed=0):
 
 
 def main():
+    global OUT
     ap = argparse.ArgumentParser()
     ap.add_argument("--simulate", type=int, default=0, help="number of hidden stretches to test on")
     ap.add_argument("--gap-frames", default="25-75", help="hidden stretch length range for --simulate")
@@ -202,7 +203,6 @@ def main():
     ap.add_argument("--miss-cost", type=float, default=1.5, help="track: cost of a frame with no peak")
     ap.add_argument("--track", default=OUT, help="detector track file to read and fill")
     args = ap.parse_args()
-    global OUT
     OUT = args.track
     p = dict(base_px=args.base_px, grow_px=args.grow_px, cap_frames=args.cap_frames, min_score=args.min_score,
              max_gap=int(args.max_gap_s * FPS), method=args.method, max_step=args.max_step, miss_cost=args.miss_cost)
