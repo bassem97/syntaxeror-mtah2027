@@ -269,7 +269,8 @@ inputs are the 10-second means of the team and moving-ball evidence. What it lac
 control cue's sharpness at quick exchanges: alone it under-segments the fast public window (7
 possessions for 17). The sum keeps both. Dropping the long context windows loses the gain
 (pooled 0.572 with 1-second context only), the weight and the decoder costs sit on a flat
-plateau (0.64 to 0.66 for weights 0.35 to 0.75 and costs 40 to 50), and the labeller's known
+plateau (0.64 to 0.66 for weights 0.35 to 0.75 and costs 40 to 50), three training seeds score
+0.636 to 0.653 alone and 0.656 averaged (5-95% bootstrap 0.56 to 0.75), and the labeller's known
 offset does not matter: shifting the hand labels by it before training changes nothing.
 
 The hand labels themselves are not distributed with the code; the three trained models are, in
