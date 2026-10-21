@@ -244,6 +244,21 @@ def viterbi(score, team_cost, dead_cost, dead_exit=None):
     return path
 
 
+def delay_switches(labels, k):
+    """Move every team-to-team switch k frames later (never past the next change).
+
+    The decoder switches when the opponent closes on the ball; the truth switches at the
+    controlled touch, which comes a median 1 s later on the labelled windows."""
+    labels = labels.copy()
+    n = len(labels)
+    for i in np.where((labels[1:] != labels[:-1]) & np.isin(labels[1:], ["H", "A"]) & np.isin(labels[:-1], ["H", "A"]))[0] + 1:
+        j = i
+        while j < n and j < i + k and labels[j] == labels[i]:
+            j += 1
+        labels[i:j] = labels[i - 1]
+    return labels
+
+
 def build(p):
     f = load(p.get("ball", "tracker"))
     n = len(f["ball_x"])
@@ -254,7 +269,7 @@ def build(p):
         labels[first:lo] = "D"
         half_labels = LABELS[viterbi(score[lo:last + 1], p["team_cost"], p["dead_cost"], p["dead_exit"])]
         labels[lo:last + 1] = merge_short_dead(half_labels, p["min_dead"])
-    return labels
+    return delay_switches(labels, int(p["switch_delay"]))
 
 
 def self_check():
@@ -269,6 +284,8 @@ def self_check():
     assert list(path[30:]) == [A] * 10, path
     assert "".join(merge_short_dead(np.array(list("HHDDAA")), 3)) == "HHAAAA"
     assert "".join(merge_short_dead(np.array(list("HHDDDAA")), 3)) == "HHDDDAA"
+    assert "".join(delay_switches(np.array(list("HHAAAADH")), 2)) == "HHHHAADH"
+    assert "".join(delay_switches(np.array(list("HHADD")), 5)) == "HHHDD"
 
 
 def write(labels, path):
@@ -285,6 +302,7 @@ def argparser():
     ap.add_argument("--team-cost", type=float, default=45)
     ap.add_argument("--dead-cost", type=float, default=40, help="keep >= team-cost / 2, or a team switch routes through a 1-frame D")
     ap.add_argument("--dead-exit", type=float, default=None, help="cost of leaving D; defaults to dead-cost")
+    ap.add_argument("--switch-delay", type=int, default=20, help="frames to move each team-to-team switch later")
     ap.add_argument("--kick-w", type=float, default=1.0)
     ap.add_argument("--min-dead", type=int, default=25, help="frames; shorter D runs are merged away")
     ap.add_argument("--speed-ratio", type=float, default=0.8)
