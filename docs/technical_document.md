@@ -54,9 +54,9 @@ Team evidence, positive means home:
 
 | term | signal |
 |---|---|
-| control | the gap between the nearest away and nearest home player, only on frames where someone is within 1.5 m of the ball |
+| control | the gap between the nearest away and nearest home player, only on frames where someone is within 1.2 m of the ball |
 | carry | while nobody controls the ball, a weak vote for the last team that did, with no time limit |
-| touch | a change of ball velocity above 4 m/s within 3.5 m of a player, or the ball reappearing next to one, is an impulse for that player's team |
+| touch | a change of ball velocity above 4 m/s within 3.5 m of a player, or the ball reappearing next to one, is an impulse for that player's team. Weight zero in the submitted setting: the fit in §5 found it adds spurious switches |
 | shape | home spread minus away spread, on frames without a ball only: the side in possession spreads out, the defender compacts |
 | carrier | which team has a nearby player whose velocity matches the ball's: the carrier moves with the ball, a defender beside it does not. Names the right team on 90% of the frames where it has a clear margin, a third of moving-ball frames |
 | restart prior | a tagged set piece that names a team (corner, goal kick, free kick, kick-off after a goal: the conceding side) adds a small vote for that team from 2 s before to 15 s after the tag |
@@ -69,7 +69,7 @@ first silent frame, four seconds before the real touch.
 ### Decoding
 
 Viterbi over the three states, per half. Switching between teams costs 45, entering or leaving a
-dead ball costs 30, in the units of the evidence above (typical per-frame evidence is between 0.5
+dead ball costs 40, in the units of the evidence above (typical per-frame evidence is between 0.5
 and 2). Dead-ball runs shorter than one second are merged into the following possession: a
 sub-second stoppage is a decoding shortcut, not football. Frames before kick-off, at halftime and
 after the final whistle are `X`; the graded frames of the second half before its kick-off are `D`,
@@ -136,11 +136,13 @@ where the tracker has nothing. Everything is in `vision/`.
   in 16 crops there was no ball anywhere near the tracked position. Dropping frames without a
   clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
 - **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
-  fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill on the internal validation
-  set (13.5 min, 34 possessions): macroF1 0.829 to 0.845, spellF1 0.491 to 0.504. On the public
-  window spellF1 0.546 to 0.563 and macroF1 0.890 to 0.873. Full-match possessions 279 to 287.
-  A small gain, within the noise of 34 possessions: the 5-95% bootstrap intervals on the internal
-  set are 0.41 to 0.59 with the detector and 0.41 to 0.58 without.
+  fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill and the decoder of §5 on
+  the internal validation set (23.5 min, 54 possessions): macroF1 0.840 to 0.847, spellF1 0.541 to
+  0.531. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
+  possessions 225 to 235. Before the decoder was fitted the detector led on spellF1 by 0.013 on
+  34 possessions; after it the sign flipped. The 5-95% bootstrap intervals on the internal set are
+  0.45 to 0.62 with the detector and 0.46 to 0.63 without: a wash on spellF1, a consistent
+  0.7-point gain on macroF1.
 
 The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
 cannot see at all: a ball hidden in a crowd or in the air is lost to the detector exactly as it is
@@ -150,10 +152,10 @@ is left there.
 ## 3. Possession rules implemented
 
 - A change of possession needs the other team to gain control. Operationally: a touch by an
-  opponent, or enough frames with an opponent within 1.5 m of the ball and closer than our own
+  opponent, or enough frames with an opponent within 1.2 m of the ball and closer than our own
   players, to pay the switching cost, which comes to roughly one to two seconds of clear control.
 - A loose ball, a deflection or an aerial duel without control does not change possession: while
-  nobody is within 1.5 m, the carry term keeps voting for the last controlling team, indefinitely.
+  nobody is within 1.2 m, the carry term keeps voting for the last controlling team, indefinitely.
 - Dead ball is a stoppage, never a possession. Ownership of a dead ball is not predicted.
 - Restarts: the kick cue places the end of the stoppage at the kick; the restart prior biases the
   first seconds towards the tagged team.
@@ -162,34 +164,51 @@ is left there.
 
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror | 0.890 | 0.546 | 16 |
+| SyntaxEror | 0.910 | 0.594 | 18 |
+| SyntaxEror_detector | 0.893 | 0.613 | 16 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 279 possessions of mean 14 s and 108 stoppages of mean 22 s,
-with 38% of graded frames dead. Of the 17 true possessions, the five shorter than four seconds are
-absorbed by their neighbours; the long ones match at IoU 0.75 to 0.95.
+On the full match the file contains 225 possessions of mean 17 s and 100 stoppages of mean 24 s,
+with 38% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
+boundary one to three seconds off, not a missing possession.
 
-## 5. What we did not tune, and why
+## 5. Fitting the decoder on our own labels
 
-Every setting we tried that lengthens possessions (a higher switching cost, a tighter control
-radius, a weaker carry, a stronger shape term) scores higher on the public window and lowers the
-full-match possession count, from about 280 to 220 or fewer. That is exactly the effect the
-organisers document with their own baselines: the window has 17 possessions of mean 14 s and
-cannot rank anything. We left the decoder costs and radii where the full-match possession and
-stoppage counts look like a football match, and used the window only to check that each evidence
-term behaves as intended. Moving both costs by 20% in either direction changes the public
-`spellF1` by less than the metric's noise band.
+The public window cannot rank settings: 17 possessions in the fastest five minutes of the match,
+and the organisers say as much. We hand-labelled four more five-minute windows with the kit in
+`labeling/` (first half minute 26, second half minutes 4 and 37, plus the 3.5 minutes after the
+public window), touch-level, following the convention written in `labeling/README.md`. The
+labeller first labelled the public window blind and scored 0.96 macroF1 against the truth. With
+the public window that is 23.5 minutes and 54 possessions. The labels are validation data only;
+they are never an input to the algorithm, which the rules allow.
 
-### Fitting on our own labels
+`analysis/fit.py` decodes the model over a grid of its five main parameters (team-switch cost,
+dead-switch cost, control radius, carry weight, touch weight) and scores every window with the
+organisers' metric code, choosing each window's setting on the other windows only, so the
+report is an out-of-sample estimate.
 
-`analysis/fit.py` decodes the model over a grid of its five main parameters and scores every
-hand-labelled window with the organisers' metric code, choosing each window's setting on the
-other windows only. With three windows (13.5 min, 34 possessions) the fitted settings score 0.443
-spellF1 out of sample against 0.492 for the defaults: the labels are not yet enough to tune on,
-and the defaults stay. The marginals lean towards a tighter control radius and a higher switching
-cost, which is also the direction the public window alone rewards, so we treat it as unproven
-until more windows are labelled.
+- With three windows the fit generalised worse than the defaults (0.443 against 0.492 held out),
+  and nothing was changed.
+- With four windows every held-out fit, with both ball sources, moved the same way: control
+  radius 1.2 m instead of 1.5, touch impulses off, carry weight 0.15 instead of 0.25, dead-switch
+  cost 40 instead of 30. Held-out spellF1 0.553 against 0.499 with the tracker ball. The public
+  window is one of the four and weighs a quarter of the fit; choosing on the other three alone
+  picks the same setting.
+- The last window (second half, minute 37: 9 possessions, 47% dead) was labelled after the fit and
+  played no part in it. On it the fitted setting scores spellF1 0.400 against 0.300 for the old
+  defaults with the tracker ball, and 0.348 against 0.320 with the detector.
+- A finer grid pushed further in the same direction (team cost 80, radius 0.9 m, carry 0.05)
+  scores higher in sample and worse held out (0.514), so the coarse pick stands.
+
+The gain is almost entirely fewer spurious short possessions: on the four fitted windows the
+predicted segment count fell from 80 to 70 and the spurious ones from 54 to 43 with the matched
+count unchanged; full-match possessions fell from 279 to 225. The direction is the one the public
+window alone also rewards, which is why we had refused to follow it before the labels existed.
+
+On the five windows the submitted file scores spellF1 0.541 (5-95% bootstrap 0.46 to 0.63) and
+macroF1 0.840; the detector variant 0.531 (0.45 to 0.62) and 0.847.
 
 ## 6. Limitations
 

@@ -11,6 +11,7 @@ Scores the windows with the organisers' metric code (../mtah/evaluation/possessi
 """
 import argparse
 import itertools
+import json
 import os
 import sys
 
@@ -47,7 +48,11 @@ def main():
     ap.add_argument("--windows", required=True, help="comma-separated first-last frames")
     ap.add_argument("--ball", default="tracker", choices=["tracker", "detector"])
     ap.add_argument("--max", type=int, default=0, help="limit the number of settings (0 = all)")
+    ap.add_argument("--grid", help='JSON overriding GRID entries, e.g. {"ctrl_m": [0.9, 1.2]}')
+    ap.add_argument("--tag", default="", help="suffix for the output csv")
     args = ap.parse_args()
+    if args.grid:
+        GRID.update(json.loads(args.grid))
     gt = pd.read_csv(args.gt)["label"].values
     windows = [tuple(int(x) for x in w.split("-")) for w in args.windows.split(",")]
     base = {a.dest: a.default for a in model.argparser()._actions if a.dest != "help"}
@@ -67,7 +72,7 @@ def main():
                          **{"w{}_macro".format(i): s[1] for i, s in enumerate(scores)}))
         print(" ".join("{}={}".format(k, v) for k, v in zip(keys, c)), " spell per window:", [round(s[0], 3) for s in scores], flush=True)
     df = pd.DataFrame(rows)
-    out = os.path.join(ROOT, "labeling", "data", "fit_{}.csv".format(args.ball))
+    out = os.path.join(ROOT, "labeling", "data", "fit_{}{}.csv".format(args.ball, args.tag))
     df.to_csv(out, index=False)
     spell_cols = [c for c in df.columns if c.endswith("_spell")]
     df["mean_spell"] = df[spell_cols].mean(axis=1)
