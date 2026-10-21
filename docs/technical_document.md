@@ -139,8 +139,8 @@ where the tracker has nothing. Everything is in `vision/`.
   clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
 - **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
   fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill and the decoder of §5 on
-  the internal validation set (33.5 min, 69 possessions): macroF1 0.855 to 0.856, spellF1 0.592 to
-  0.544. On the public window spellF1 0.606 to 0.627 and macroF1 0.911 to 0.895. Full-match
+  the internal validation set as it then was (33.5 min, 69 possessions), hand evidence only:
+  macroF1 0.855 to 0.856, spellF1 0.592 to 0.544. On the public window spellF1 0.606 to 0.627 and macroF1 0.911 to 0.895. Full-match
   possessions 206 to 216. Before the decoder was fitted the detector led on spellF1 by 0.013 on
   34 possessions; with the fitted decoder it trails. The 5-95% bootstrap intervals on the internal
   set are 0.46 to 0.63 with the detector and 0.51 to 0.68 without: the extra ball positions add
@@ -243,8 +243,9 @@ predicted segment count fell from 80 to 70 and the spurious ones from 54 to 43 w
 count unchanged; full-match possessions fell from 279 to 225. The direction is the one the public
 window alone also rewards, which is why we had refused to follow it before the labels existed.
 
-On the seven windows the submitted file scores spellF1 0.592 (5-95% bootstrap 0.51 to 0.68) and
-macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856.
+On those seven windows the hand-evidence decode scores spellF1 0.592 (5-95% bootstrap 0.51 to
+0.68) and macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856. The submitted
+file adds the learned evidence below.
 
 ### Learned evidence on top of the hand-written terms
 
