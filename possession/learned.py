@@ -146,7 +146,7 @@ def main(argv=None):
     ap.add_argument("--windows", help="comma-separated first-last frames")
     ap.add_argument("--fit", help="train on all windows and save the models under this prefix")
     ap.add_argument("--model", help="prefix of the saved models to decode the whole match with")
-    ap.add_argument("--w", type=float, default=0.5, help="scale of the log-probabilities as evidence")
+    ap.add_argument("--w", type=float, default=0.35, help="scale of the log-probabilities as evidence")
     ap.add_argument("--hand-w", type=float, default=1.0, help="scale of the hand-written evidence (0 = classifier only)")
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--name", default="SyntaxEror_learned")

@@ -164,31 +164,33 @@ is left there.
 
 ## 4. Results on the public window
 
-The public window is one of the seven windows the classifier of §5 is trained on, so the
-submitted file's score there (spellF1 0.729, macroF1 0.964) is in-sample and says nothing. The
-honest number is the held-out one: a classifier trained on the other six windows scores spellF1
-0.600 and macroF1 0.898 on it, against 0.606 and 0.911 for the hand-written evidence alone.
+The public window is one of the ten windows the classifier of §5 is trained on, so the
+submitted file's score there is in-sample and says nothing. The honest number is the held-out
+one: a classifier trained on the other nine windows scores spellF1 0.384 and macroF1 0.871 on
+it, against 0.606 and 0.911 for the hand-written evidence alone. This window is the fastest five
+minutes of the match and the classifier under-segments it (8 possessions for 17); on the nine
+other windows, 90 possessions, it wins. §5 has the full table and the reasoning.
 
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
 | SyntaxEror, hand evidence only (`python -m possession.model`) | 0.911 | 0.606 | 18 |
-| SyntaxEror, submitted (hand + learned), held out on this window | 0.898 | 0.600 | 16 |
+| SyntaxEror, submitted (hand + learned), held out on this window | 0.871 | 0.384 | 8 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the submitted file contains 190 possessions of mean 18 s and 101 stoppages of
-mean 29 s, with 46% of graded frames dead (the hand-only decode: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+On the full match the submitted file contains 186 possessions of mean 19 s and 99 stoppages of
+mean 28 s, with 44% of graded frames dead (the hand-only decode: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
 
 ## 5. Fitting the decoder on our own labels
 
 The public window cannot rank settings: 17 possessions in the fastest five minutes of the match,
-and the organisers say as much. We hand-labelled six more windows with the kit in
-`labeling/` (first half minutes 26 and 38, second half minutes 4, 20 and 37, plus the 3.5
-minutes after the public window), touch-level, following the convention written in `labeling/README.md`. The
+and the organisers say as much. We hand-labelled nine more windows with the kit in
+`labeling/` (first half minutes 13, 26 and 38, second half minutes 4, 10, 20, 37 and 44, plus the
+3.5 minutes after the public window), touch-level, following the convention written in `labeling/README.md`. The
 labeller first labelled the public window blind and scored 0.96 macroF1 against the truth. With
-the public window that is 33.5 minutes and 69 possessions. The labels are validation data only;
+the public window that is 48.5 minutes and 107 possessions. The labels are validation data only;
 they are never an input to the algorithm, which the rules allow.
 
 `analysis/fit.py` decodes the model over a grid of its five main parameters (team-switch cost,
@@ -246,35 +248,46 @@ macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856.
 
 ### Learned evidence on top of the hand-written terms
 
-With seven labelled windows the labels can train as well as validate. `possession/learned.py`
+With ten labelled windows the labels can train as well as validate. `possession/learned.py`
 fits a gradient-boosted classifier (LightGBM, 300 trees of 15 leaves, strong regularisation) that
 gives every frame a probability of H, A and D from 90 columns: the tracking features, the
 hand-written evidence terms, and centred rolling means of each over 1, 2, 4 and 10 seconds. The
 frames within 10 of a hand-labelled transition are left out of training (the labels are only good
 to a third of a second there), every window is also fed mirrored (home and away swapped) so no
 team bias can be learned, and three seeds are averaged. The classifier's log-probabilities, at
-weight 0.5, are added to the hand-written evidence and decoded by the same Viterbi with the same
+weight 0.35, are added to the hand-written evidence and decoded by the same Viterbi with the same
 costs and the same switch delay.
 
-Everything below is held out: each window is scored with a classifier that never saw it.
+Everything below is held out: each window is scored with a classifier that never saw it, three
+seeds averaged. The windows are in the order public, the 3.5 min after it, first-half minutes 26
+and 38, second-half minutes 4, 20 and 37, then the last three labelled: first-half minute 13,
+second-half minutes 10 and 44.
 
-| evidence | per-window spellF1 (public, 2nd, W1, W4, W2, W5, W3) | pooled spellF1 | macroF1 |
+| evidence | per-window spellF1 | pooled spellF1 (5-95%) | macroF1 |
 |---|---|---|---|
-| hand-written | 0.606 0.550 0.574 0.500 0.678 0.740 0.463 | 0.592 | 0.855 |
-| classifier alone, weight 0.5 | 0.467 0.646 0.526 0.400 0.756 0.933 0.625 | 0.609 | 0.883 |
-| hand + classifier x0.5 (submitted) | 0.600 0.693 0.643 0.436 0.781 0.871 0.533 | 0.653 | 0.889 |
+| hand-written | 0.606 0.550 0.574 0.500 0.678 0.740 0.463 0.462 0.432 0.487 | 0.546 (0.48-0.61) | 0.805 |
+| classifier alone, weight 0.5 | 0.365 0.492 0.511 0.400 0.838 0.880 0.657 0.477 0.517 0.504 | 0.554 (0.47-0.64) | 0.837 |
+| hand + classifier x0.35 (submitted) | 0.384 0.720 0.678 0.436 0.781 1.000 0.600 0.587 0.462 0.487 | 0.596 (0.52-0.66) | 0.844 |
+
+The last three windows were labelled after the first version of the classifier was built, so
+they were also a fresh test of the committed pipeline before retraining: on them the hand
+evidence scores spellF1 0.459 and macroF1 0.692, the pipeline trained on the seven earlier
+windows 0.525 and 0.759.
 
 What the classifier adds is where the ball is lost and around stoppages: its most important
 inputs are the 10-second means of the team and moving-ball evidence. What it lacks is the hand
-control cue's sharpness at quick exchanges: alone it under-segments the fast public window (7
-possessions for 17). The sum keeps both. Dropping the long context windows loses the gain
-(pooled 0.572 with 1-second context only), the weight and the decoder costs sit on a flat
-plateau (0.64 to 0.66 for weights 0.35 to 0.75 and costs 40 to 50), three training seeds score
-0.636 to 0.653 alone and 0.656 averaged (5-95% bootstrap 0.56 to 0.75), and the labeller's known
-offset does not matter: shifting the hand labels by it before training changes nothing.
+control cue's sharpness at quick exchanges, and the public window, the fastest five minutes of
+the match, is where that shows: held out, the sum scores 0.384 there against 0.606 for the hand
+evidence alone, holding each team about six seconds too long at exchanges. Giving the classifier
+only the dead-ball channel keeps that window (0.627) but loses almost all of the pooled gain
+(0.550); the team channel is where the gain is. We go with the pooled estimate over 107
+possessions and say so here. Dropping the long context windows loses the gain, the weight and the
+decoder costs sit on a flat plateau (weights 0.35 to 0.5, costs 40 to 50), single seeds score
+within 0.02 of each other, and the labeller's known offset does not matter: shifting the hand
+labels by it before training changes nothing.
 
 The hand labels themselves are not distributed with the code; the three trained models are, in
-`models/`, and decoding from them is deterministic. They were trained on our own labels of 33.5
+`models/`, and decoding from them is deterministic. They were trained on our own labels of 48.5
 minutes of this match, which the rules allow.
 
 ## 6. Limitations
