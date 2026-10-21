@@ -1,4 +1,4 @@
-"""Regenerate the submission file from the provided match data. Deterministic, numpy + pandas only.
+"""Regenerate the submission file from the provided match data. Deterministic.
 
     python make_submission.py          # -> out/SyntaxEror.csv
 
@@ -8,8 +8,12 @@ seconds.
 """
 import warnings
 
-from possession.model import main
+import os
+
+from possession.learned import main
+
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 if __name__ == "__main__":
     warnings.simplefilter("ignore")  # nanmean over empty halftime frames
-    main([])
+    main(["--model", os.path.join(HERE, "models", "learned"), "--name", "SyntaxEror"])

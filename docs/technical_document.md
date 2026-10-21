@@ -164,15 +164,20 @@ is left there.
 
 ## 4. Results on the public window
 
+The public window is one of the seven windows the classifier of §5 is trained on, so the
+submitted file's score there (spellF1 0.729, macroF1 0.964) is in-sample and says nothing. The
+honest number is the held-out one: a classifier trained on the other six windows scores spellF1
+0.600 and macroF1 0.898 on it, against 0.606 and 0.911 for the hand-written evidence alone.
+
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror | 0.911 | 0.606 | 18 |
-| SyntaxEror_detector | 0.895 | 0.627 | 16 |
+| SyntaxEror, hand evidence only (`python -m possession.model`) | 0.911 | 0.606 | 18 |
+| SyntaxEror, submitted (hand + learned), held out on this window | 0.898 | 0.600 | 16 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 206 possessions of mean 18 s and 99 stoppages of mean 26 s,
-with 41% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+On the full match the submitted file contains 190 possessions of mean 18 s and 101 stoppages of
+mean 29 s, with 46% of graded frames dead (the hand-only decode: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
 
@@ -239,6 +244,38 @@ window alone also rewards, which is why we had refused to follow it before the l
 On the seven windows the submitted file scores spellF1 0.592 (5-95% bootstrap 0.51 to 0.68) and
 macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856.
 
+### Learned evidence on top of the hand-written terms
+
+With seven labelled windows the labels can train as well as validate. `possession/learned.py`
+fits a gradient-boosted classifier (LightGBM, 300 trees of 15 leaves, strong regularisation) that
+gives every frame a probability of H, A and D from 90 columns: the tracking features, the
+hand-written evidence terms, and centred rolling means of each over 1, 2, 4 and 10 seconds. The
+frames within 10 of a hand-labelled transition are left out of training (the labels are only good
+to a third of a second there), every window is also fed mirrored (home and away swapped) so no
+team bias can be learned, and three seeds are averaged. The classifier's log-probabilities, at
+weight 0.5, are added to the hand-written evidence and decoded by the same Viterbi with the same
+costs and the same switch delay.
+
+Everything below is held out: each window is scored with a classifier that never saw it.
+
+| evidence | per-window spellF1 (public, 2nd, W1, W4, W2, W5, W3) | pooled spellF1 | macroF1 |
+|---|---|---|---|
+| hand-written | 0.606 0.550 0.574 0.500 0.678 0.740 0.463 | 0.592 | 0.855 |
+| classifier alone, weight 0.5 | 0.467 0.646 0.526 0.400 0.756 0.933 0.625 | 0.609 | 0.883 |
+| hand + classifier x0.5 (submitted) | 0.600 0.693 0.643 0.436 0.781 0.871 0.533 | 0.653 | 0.889 |
+
+What the classifier adds is where the ball is lost and around stoppages: its most important
+inputs are the 10-second means of the team and moving-ball evidence. What it lacks is the hand
+control cue's sharpness at quick exchanges: alone it under-segments the fast public window (7
+possessions for 17). The sum keeps both. Dropping the long context windows loses the gain
+(pooled 0.572 with 1-second context only), the weight and the decoder costs sit on a flat
+plateau (0.64 to 0.66 for weights 0.35 to 0.75 and costs 40 to 50), and the labeller's known
+offset does not matter: shifting the hand labels by it before training changes nothing.
+
+The hand labels themselves are not distributed with the code; the three trained models are, in
+`models/`, and decoding from them is deterministic. They were trained on our own labels of 33.5
+minutes of this match, which the rules allow.
+
 ## 6. Limitations
 
 - **Team-to-team transition timing.** Restarts are decoded within a second or two, but
@@ -258,10 +295,11 @@ macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856.
 ## 7. Reproduction
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt     # numpy, pandas, lightgbm
 python make_submission.py           # -> out/SyntaxEror.csv
 ```
 
-Reads only the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`. The
-run is deterministic; two runs produce byte-identical output, and the output matches the file we
-submitted.
+Reads only the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`, and the
+three classifier files in `models/`. The run is deterministic; a clean clone on an empty data
+folder produces a byte-identical file. `python -m possession.model` writes the hand-evidence-only
+decode, and `python -m possession.learned --fit` retrains the classifier from the labels.
