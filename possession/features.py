@@ -52,7 +52,7 @@ def parse_atd(raw_path, n_slots):
     return frames, players, ball
 
 
-def build(variant="tracker", score_min=0.5):
+def build(variant="tracker", score_min=0.5, detector_path=None):
     """variant "tracker": the ball as the ATD tracks it. "detector": the same, with the frames the
     tracker lost filled from vision/infer.py wherever the detector is confident (score_min)."""
     meta_path, raw_path = require(["atd_meta", "atd_raw"])
@@ -65,7 +65,7 @@ def build(variant="tracker", score_min=0.5):
     ball = ball.copy()
     ball_src = np.where(np.isnan(ball[:, 0]), 0, 1).astype(np.int8)  # 0 none, 1 tracker, 2 detector
     if variant == "detector":
-        d = np.load(DETECTOR)
+        d = np.load(detector_path or DETECTOR)
         fill = np.isnan(ball[:, 0]) & (d["score"] >= score_min) & ~np.isnan(d["x"])
         ball[fill, 0], ball[fill, 1] = d["x"][fill], d["y"][fill]
         ball_src[fill] = 2
@@ -127,8 +127,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="tracker", choices=["tracker", "detector"])
     ap.add_argument("--score-min", type=float, default=0.5, help="detector confidence needed to fill a frame")
+    ap.add_argument("--detector-file", help="detector track to use instead of cache/ball_detector.npz")
     args = ap.parse_args()
-    path = build(args.variant, args.score_min)
+    path = build(args.variant, args.score_min, args.detector_file)
     f = dict(np.load(path))
     vis = ~np.isnan(f["ball_x"])
     print("cached", path)
