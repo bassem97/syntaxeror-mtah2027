@@ -73,7 +73,10 @@ def evidence_parts(f, p):
             s_out[i + 1:i + 1 + hold] = np.maximum(s_out[i + 1:i + 1 + hold], p["out_hold_w"])
 
     spd = roll(f["mean_speed"], FPS)
-    tempo = roll(np.nan_to_num(f["mean_speed"], nan=np.nanmedian(f["mean_speed"])), 90 * FPS, "median")
+    tempo = roll(np.nan_to_num(f["mean_speed"], nan=np.nanmedian(f["mean_speed"])), int(p["tempo_s"]) * FPS, "median")
+    # A stoppage longer than the window drags the median down to walking pace and then looks
+    # like play: the match-wide median keeps a floor under the local tempo.
+    tempo = np.maximum(tempo, p["tempo_floor"] * np.nanmedian(f["mean_speed"]))
     ratio = spd / np.maximum(tempo, 0.3)
     s_speed = np.clip((p["speed_ratio"] - ratio) * 4, -2, 2)
 
@@ -285,6 +288,8 @@ def argparser():
     ap.add_argument("--kick-w", type=float, default=1.0)
     ap.add_argument("--min-dead", type=int, default=25, help="frames; shorter D runs are merged away")
     ap.add_argument("--speed-ratio", type=float, default=0.8)
+    ap.add_argument("--tempo-s", type=float, default=90, help="half-width in seconds of the rolling tempo median")
+    ap.add_argument("--tempo-floor", type=float, default=1.0, help="tempo never below this fraction of the match median speed")
     ap.add_argument("--far-m", type=float, default=13)
     ap.add_argument("--moving-w", type=float, default=1.5)
     ap.add_argument("--out-w", type=float, default=4)

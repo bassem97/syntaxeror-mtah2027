@@ -42,7 +42,7 @@ Dead-ball evidence, positive means dead:
 | term | signal | why |
 |---|---|---|
 | out | ball tracked outside the pitch, then held for 3 s | the one unambiguous cue, and it marks the stoppage instant; nobody restarts within 3 s |
-| speed | mean player speed over 1 s, relative to a rolling 3-minute median | play stops, players slow down. Relative, because the match's tempo drifts a lot: the public window is the fastest five minutes of the match |
+| speed | mean player speed over 1 s, relative to a rolling 3-minute median floored at the match median | play stops, players slow down. Relative, because the match's tempo drifts a lot: the public window is the fastest five minutes of the match. Floored, because a stoppage longer than the window drags the median down to walking pace and then looks like play |
 | far | the further team's nearest player is more than 13 m from the ball | set-piece geometry, capped low because a low block during build-up looks the same |
 | placed | ball still (under 1.5 m/s) with nobody within 1.5 m | ball placed for a restart |
 | goal | from the goal moment to the next kick-off tag | the `GOALS` tag starts during the build-up, so the window starts at the ball seen over the line or, failing that, its last fast movement before it disappears into the net |
@@ -137,11 +137,11 @@ where the tracker has nothing. Everything is in `vision/`.
   clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
 - **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
   fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill and the decoder of §5 on
-  the internal validation set (23.5 min, 54 possessions): macroF1 0.840 to 0.847, spellF1 0.541 to
-  0.531. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
-  possessions 225 to 235. Before the decoder was fitted the detector led on spellF1 by 0.013 on
+  the internal validation set (28.5 min, 61 possessions): macroF1 0.842 to 0.846, spellF1 0.526 to
+  0.509. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
+  possessions 218 to 228. Before the decoder was fitted the detector led on spellF1 by 0.013 on
   34 possessions; after it the sign flipped. The 5-95% bootstrap intervals on the internal set are
-  0.45 to 0.62 with the detector and 0.46 to 0.63 without: a wash on spellF1, a consistent
+  0.42 to 0.59 with the detector and 0.44 to 0.60 without: a wash on spellF1, a consistent
   0.7-point gain on macroF1.
 
 The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
@@ -169,19 +169,19 @@ is left there.
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 225 possessions of mean 17 s and 100 stoppages of mean 24 s,
-with 38% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+On the full match the file contains 218 possessions of mean 17 s and 99 stoppages of mean 26 s,
+with 41% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
 
 ## 5. Fitting the decoder on our own labels
 
 The public window cannot rank settings: 17 possessions in the fastest five minutes of the match,
-and the organisers say as much. We hand-labelled four more five-minute windows with the kit in
-`labeling/` (first half minute 26, second half minutes 4 and 37, plus the 3.5 minutes after the
-public window), touch-level, following the convention written in `labeling/README.md`. The
+and the organisers say as much. We hand-labelled five more windows with the kit in
+`labeling/` (first half minutes 26 and 38, second half minutes 4 and 37, plus the 3.5 minutes
+after the public window), touch-level, following the convention written in `labeling/README.md`. The
 labeller first labelled the public window blind and scored 0.96 macroF1 against the truth. With
-the public window that is 23.5 minutes and 54 possessions. The labels are validation data only;
+the public window that is 28.5 minutes and 61 possessions. The labels are validation data only;
 they are never an input to the algorithm, which the rules allow.
 
 `analysis/fit.py` decodes the model over a grid of its five main parameters (team-switch cost,
@@ -201,14 +201,22 @@ report is an out-of-sample estimate.
   defaults with the tracker ball, and 0.348 against 0.320 with the detector.
 - A finer grid pushed further in the same direction (team cost 80, radius 0.9 m, carry 0.05)
   scores higher in sample and worse held out (0.514), so the coarse pick stands.
+- The sixth window (first half, minute 38) holds a penalty: a 2.4-minute stoppage with the ball
+  invisible and every player walking, which the model left half alive. The speed cue compares
+  speed with a rolling 3-minute median, and after a minute of standing the median itself had
+  fallen to walking pace. Flooring the median at the match-wide median fixes it: that window
+  goes from spellF1 0.26 to 0.33 and macroF1 0.59 to 0.70, one other window gains, the four
+  others and the public window are unchanged to the digit, and the match gains three stoppages.
+  Floors above the match median keep buying that window at the cost of the stoppage-heavy
+  second-half window, so the floor stays at 1.0.
 
 The gain is almost entirely fewer spurious short possessions: on the four fitted windows the
 predicted segment count fell from 80 to 70 and the spurious ones from 54 to 43 with the matched
 count unchanged; full-match possessions fell from 279 to 225. The direction is the one the public
 window alone also rewards, which is why we had refused to follow it before the labels existed.
 
-On the five windows the submitted file scores spellF1 0.541 (5-95% bootstrap 0.46 to 0.63) and
-macroF1 0.840; the detector variant 0.531 (0.45 to 0.62) and 0.847.
+On the six windows the submitted file scores spellF1 0.526 (5-95% bootstrap 0.44 to 0.60) and
+macroF1 0.842; the detector variant 0.509 (0.42 to 0.59) and 0.846.
 
 ## 6. Limitations
 
