@@ -137,11 +137,11 @@ where the tracker has nothing. Everything is in `vision/`.
   clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
 - **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
   fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill and the decoder of §5 on
-  the internal validation set (28.5 min, 61 possessions): macroF1 0.842 to 0.846, spellF1 0.526 to
-  0.509. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
+  the internal validation set (33.5 min, 69 possessions): macroF1 0.842 to 0.849, spellF1 0.555 to
+  0.536. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
   possessions 218 to 228. Before the decoder was fitted the detector led on spellF1 by 0.013 on
   34 possessions; after it the sign flipped. The 5-95% bootstrap intervals on the internal set are
-  0.42 to 0.59 with the detector and 0.44 to 0.60 without: a wash on spellF1, a consistent
+  0.46 to 0.61 with the detector and 0.48 to 0.63 without: a wash on spellF1, a consistent
   0.7-point gain on macroF1.
 
 The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
@@ -177,11 +177,11 @@ boundary one to three seconds off, not a missing possession.
 ## 5. Fitting the decoder on our own labels
 
 The public window cannot rank settings: 17 possessions in the fastest five minutes of the match,
-and the organisers say as much. We hand-labelled five more windows with the kit in
-`labeling/` (first half minutes 26 and 38, second half minutes 4 and 37, plus the 3.5 minutes
-after the public window), touch-level, following the convention written in `labeling/README.md`. The
+and the organisers say as much. We hand-labelled six more windows with the kit in
+`labeling/` (first half minutes 26 and 38, second half minutes 4, 20 and 37, plus the 3.5
+minutes after the public window), touch-level, following the convention written in `labeling/README.md`. The
 labeller first labelled the public window blind and scored 0.96 macroF1 against the truth. With
-the public window that is 28.5 minutes and 61 possessions. The labels are validation data only;
+the public window that is 33.5 minutes and 69 possessions. The labels are validation data only;
 they are never an input to the algorithm, which the rules allow.
 
 `analysis/fit.py` decodes the model over a grid of its five main parameters (team-switch cost,
@@ -209,14 +209,18 @@ report is an out-of-sample estimate.
   others and the public window are unchanged to the digit, and the match gains three stoppages.
   Floors above the match median keep buying that window at the cost of the stoppage-heavy
   second-half window, so the floor stays at 1.0.
+- Refitting the five decoder parameters on all seven windows leaves the current setting at the
+  top of the grid (mean per-window spellF1 0.544 against 0.548 for the best cell, inside the
+  noise), and the leave-one-window-out choices score 0.503 held out against 0.544 for the
+  current setting. The fit has converged on these labels.
 
 The gain is almost entirely fewer spurious short possessions: on the four fitted windows the
 predicted segment count fell from 80 to 70 and the spurious ones from 54 to 43 with the matched
 count unchanged; full-match possessions fell from 279 to 225. The direction is the one the public
 window alone also rewards, which is why we had refused to follow it before the labels existed.
 
-On the six windows the submitted file scores spellF1 0.526 (5-95% bootstrap 0.44 to 0.60) and
-macroF1 0.842; the detector variant 0.509 (0.42 to 0.59) and 0.846.
+On the seven windows the submitted file scores spellF1 0.555 (5-95% bootstrap 0.48 to 0.63) and
+macroF1 0.842; the detector variant 0.536 (0.46 to 0.61) and 0.849.
 
 ## 6. Limitations
 
