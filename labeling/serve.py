@@ -14,6 +14,7 @@ Everything stays on this machine. Standard library only.
 """
 import argparse
 import os
+import time
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
@@ -77,6 +78,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(404)
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         os.makedirs(DATA, exist_ok=True)
+        # A save with fewer marks than the file has is the only way labels get lost: keep the
+        # old file in marks_history/ so any wipe can be undone.
+        if os.path.isfile(path):
+            old = open(path, "rb").read()
+            if old.count(b"\n") > body.count(b"\n"):
+                hist = os.path.join(DATA, "marks_history")
+                os.makedirs(hist, exist_ok=True)
+                with open(os.path.join(hist, time.strftime("%Y%m%d-%H%M%S_") + os.path.basename(path)), "wb") as fh:
+                    fh.write(old)
         with open(path, "wb") as fh:
             fh.write(body)
         self.send_response(204)
