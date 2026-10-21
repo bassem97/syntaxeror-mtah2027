@@ -170,6 +170,16 @@ stoppage counts look like a football match, and used the window only to check th
 term behaves as intended. Moving both costs by 20% in either direction changes the public
 `spellF1` by less than the metric's noise band.
 
+### Fitting on our own labels
+
+`analysis/fit.py` decodes the model over a grid of its five main parameters and scores every
+hand-labelled window with the organisers' metric code, choosing each window's setting on the
+other windows only. With three windows (13.5 min, 34 possessions) the fitted settings score 0.443
+spellF1 out of sample against 0.492 for the defaults: the labels are not yet enough to tune on,
+and the defaults stay. The marginals lean towards a tighter control radius and a higher switching
+cost, which is also the direction the public window alone rewards, so we treat it as unproven
+until more windows are labelled.
+
 ## 6. Limitations
 
 - **Team-to-team transition timing.** Restarts are decoded within a second or two, but
