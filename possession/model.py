@@ -157,6 +157,13 @@ def evidence_parts(f, p):
         s_shape = np.clip(np.nan_to_num(spread, nan=0.0) / 6.0, -1, 1) * p["shape_w"]
         team = team + (np.where(vis, 0.0, s_shape) if p["shape_invis_only"] else s_shape)
 
+    # Who moves with the ball: the carrier shares the ball's velocity, a defender beside it does
+    # not. Only meaningful while the ball moves and someone is near it.
+    if p["match_w"] > 0 and "match_home" in f:
+        mh, ma = f["match_home"], f["match_away"]
+        moving = vis & (np.nan_to_num(f["ball_speed"], nan=0.0) > 1.0)
+        team = team + np.where(moving, np.clip((mh - ma) * 3.0, -1.5, 1.5), 0.0) * p["match_w"]
+
     # Restart prior: a tagged set piece names the team that restarts play. The tag starts up to
     # ~12 s before the actual restart, so the prior covers a window rather than an instant.
     home_name = "barcelona"
@@ -286,6 +293,7 @@ def argparser():
     ap.add_argument("--out-hold-s", type=float, default=3.0, help="seconds of held dead evidence after the ball is seen out")
     ap.add_argument("--out-hold-w", type=float, default=2.0)
     ap.add_argument("--ctrl-soft", type=float, default=0.0, help="metres; >0 switches to distance-weighted control evidence")
+    ap.add_argument("--match-w", type=float, default=0.5, help="weight of the velocity-match (ball carrier) evidence")
     ap.add_argument("--shape-w", type=float, default=0.15, help="weight of the team-spread evidence")
     ap.add_argument("--shape-invis-only", type=int, default=1, help="1: shape evidence only on frames without a ball")
     ap.add_argument("--restart-w", type=float, default=0.5)

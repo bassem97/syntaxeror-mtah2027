@@ -58,6 +58,7 @@ Team evidence, positive means home:
 | carry | while nobody controls the ball, a weak vote for the last team that did, with no time limit |
 | touch | a change of ball velocity above 4 m/s within 3.5 m of a player, or the ball reappearing next to one, is an impulse for that player's team |
 | shape | home spread minus away spread, on frames without a ball only: the side in possession spreads out, the defender compacts |
+| carrier | which team has a nearby player whose velocity matches the ball's: the carrier moves with the ball, a defender beside it does not. Names the right team on 90% of the frames where it has a clear margin, a third of moving-ball frames |
 | restart prior | a tagged set piece that names a team (corner, goal kick, free kick, kick-off after a goal: the conceding side) adds a small vote for that team from 2 s before to 15 s after the tag |
 
 The carry term is the challenge's own possession rule written as evidence: a loose or airborne ball
@@ -88,6 +89,15 @@ seconds before the actual restart, and two of the four stoppages carry no tag at
 tags are 70 to 250 seconds long and start during the build-up. We use the tags for two things only:
 the goal-to-kick-off window, anchored on the goal moment found in the ball track, and the restart
 prior on the team. The prior is worth about one point of `spellF1` on the public window.
+
+**Stoppages after fouls are entered late, and we could not fix it.** Against our labelled windows
+the model enters dead ball 1 to 7 s after the whistle on fouls, because at the whistle the ball
+is still rolling at 8 to 12 m/s and players are still sprinting, so every cue says play. Three
+attempts failed on measurement: a dead prior in the seconds before a tagged free kick or throw-in
+(most late stoppages have no tag within reach; no change), moving a predicted stoppage back to the
+last touch (helps the two worst cases, hurts five others, since the last touch is 1 to 3 s before
+the whistle), and "nobody is chasing the rolling ball" (three times more common in live play,
+because passes travel with nobody near them). The whistle is simply not observable in tracking.
 
 **Tried and dropped.** A reception detector (a fast ball slowing onto a player, `touches.receptions`):
 it fires about four times a minute and names the right team nine times in ten, but it changes no
@@ -129,7 +139,8 @@ where the tracker has nothing. Everything is in `vision/`.
   fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill on the internal validation
   set (13.5 min, 34 possessions): macroF1 0.829 to 0.845, spellF1 0.491 to 0.504. On the public
   window spellF1 0.546 to 0.563 and macroF1 0.890 to 0.873. Full-match possessions 279 to 287.
-  A small gain, within the noise of 34 possessions.
+  A small gain, within the noise of 34 possessions: the 5-95% bootstrap intervals on the internal
+  set are 0.41 to 0.59 with the detector and 0.41 to 0.58 without.
 
 The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
 cannot see at all: a ball hidden in a crowd or in the air is lost to the detector exactly as it is

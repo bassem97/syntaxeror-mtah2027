@@ -12,6 +12,7 @@ Arrays, all length n_frames (video frame index, 0-based):
   mean_speed          mean speed (m/s) of all tracked players
   n_players           tracked players on the frame
   ball_speed          ball speed in m/s from consecutive visible frames (NaN otherwise)
+  match_home, match_away   best agreement (0-1) between a nearby player's velocity and the ball's, per team
   home_cx, away_cx    team centroid along the pitch, metres
   home_spread, away_spread   mean distance of a team's players from their centroid, metres
 """
@@ -89,6 +90,22 @@ def build(variant="tracker", score_min=0.5, detector_path=None):
     step = np.sqrt(np.diff(bx) ** 2 + np.diff(by) ** 2) * GAMES[GAME]["fps"]
     ball_speed[1:] = step
 
+    # Who moves with the ball: velocity of every player and of the ball over +/- 2 frames, and per
+    # team the best agreement between a nearby player's velocity and the ball's. A player carrying
+    # the ball shares its velocity; a defender next to it usually does not.
+    fps = GAMES[GAME]["fps"]
+    def velocity(a):
+        v = np.full_like(a, np.nan)
+        v[2:-2] = (a[4:] - a[:-4]) * fps / 4
+        return v
+    pvx, pvy = velocity(px), velocity(py)
+    bvx, bvy = velocity(bx), velocity(by)
+    dv = np.sqrt((pvx - bvx[:, None]) ** 2 + (pvy - bvy[:, None]) ** 2)
+    agree = np.exp(-dv / 2.0) * np.exp(-dist / 2.0)      # 1 = same velocity at the ball, fades with 2 m/s or 2 m
+    agree = np.where(np.isnan(agree), 0.0, agree)
+    match_home = np.max(np.where(is_home[None, :], agree, 0.0), axis=1)
+    match_away = np.max(np.where(~is_home[None, :], agree, 0.0), axis=1)
+
     # Team shape, independent of the ball: centroid along the pitch and spread (mean distance of
     # a team's players from their centroid). The team in possession tends to spread and push up.
     hx = np.where(is_home[None, :], px, np.nan)
@@ -108,7 +125,7 @@ def build(variant="tracker", score_min=0.5, detector_path=None):
                         n_home3=n_home3, n_away3=n_away3,
                         mean_speed=np.nanmean(ps, axis=1),
                         n_players=np.sum(~np.isnan(px), axis=1),
-                        ball_speed=ball_speed,
+                        ball_speed=ball_speed, match_home=match_home, match_away=match_away,
                         home_cx=home_cx, away_cx=away_cx, home_spread=home_spread, away_spread=away_spread)
     return out
 
