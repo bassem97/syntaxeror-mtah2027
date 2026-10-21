@@ -58,7 +58,7 @@ Team evidence, positive means home:
 | carry | while nobody controls the ball, a weak vote for the last team that did, with no time limit |
 | touch | a change of ball velocity above 4 m/s within 3.5 m of a player, or the ball reappearing next to one, is an impulse for that player's team. Weight zero in the submitted setting: the fit in §5 found it adds spurious switches |
 | shape | home spread minus away spread, on frames without a ball only: the side in possession spreads out, the defender compacts |
-| carrier | which team has a nearby player whose velocity matches the ball's: the carrier moves with the ball, a defender beside it does not. Names the right team on 90% of the frames where it has a clear margin, a third of moving-ball frames |
+| carrier | which team has a nearby player whose velocity matches the ball's: the carrier moves with the ball, a defender beside it does not. Names the right team on 90% of the frames where it has a clear margin, a third of moving-ball frames. Weight zero in the submitted setting: on 34 possessions it added a little macroF1, on 69 it costs 0.025 spellF1 (§5) |
 | restart prior | a tagged set piece that names a team (corner, goal kick, free kick, kick-off after a goal: the conceding side) adds a small vote for that team from 2 s before to 15 s after the tag |
 
 The carry term is the challenge's own possession rule written as evidence: a loose or airborne ball
@@ -137,12 +137,12 @@ where the tracker has nothing. Everything is in `vision/`.
   clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
 - **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
   fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill and the decoder of §5 on
-  the internal validation set (33.5 min, 69 possessions): macroF1 0.842 to 0.849, spellF1 0.555 to
-  0.536. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
-  possessions 218 to 228. Before the decoder was fitted the detector led on spellF1 by 0.013 on
-  34 possessions; after it the sign flipped. The 5-95% bootstrap intervals on the internal set are
-  0.46 to 0.61 with the detector and 0.48 to 0.63 without: a wash on spellF1, a consistent
-  0.7-point gain on macroF1.
+  the internal validation set (33.5 min, 69 possessions): macroF1 0.850 to 0.851, spellF1 0.580 to
+  0.533. On the public window spellF1 0.594 to 0.613 and macroF1 0.910 to 0.893. Full-match
+  possessions 206 to 216. Before the decoder was fitted the detector led on spellF1 by 0.013 on
+  34 possessions; with the fitted decoder it trails. The 5-95% bootstrap intervals on the internal
+  set are 0.45 to 0.61 with the detector and 0.50 to 0.66 without: the extra ball positions add
+  short spurious possessions that the decoder no longer smooths away.
 
 The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
 cannot see at all: a ball hidden in a crowd or in the air is lost to the detector exactly as it is
@@ -169,7 +169,7 @@ is left there.
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 218 possessions of mean 17 s and 99 stoppages of mean 26 s,
+On the full match the file contains 206 possessions of mean 18 s and 99 stoppages of mean 26 s,
 with 41% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
@@ -213,14 +213,20 @@ report is an out-of-sample estimate.
   top of the grid (mean per-window spellF1 0.544 against 0.548 for the best cell, inside the
   noise), and the leave-one-window-out choices score 0.503 held out against 0.544 for the
   current setting. The fit has converged on these labels.
+- A second round over the cue weights set by hand before any labels existed (shape, carrier,
+  restart prior, speed ratio, moving-ball, kick, out-of-bounds hold, far-team radius, minimum
+  dead run), in three grids with the decoder held at its fitted values: every one is flat or
+  worse held out, except the carrier cue, whose removal lifts the mean per-window spellF1 from
+  0.544 to 0.580 (held out 0.569) and macroF1 from 0.818 to 0.832. It had been accepted on 34
+  possessions for a small macroF1 gain; on 69 it adds short wrong-team possessions.
 
 The gain is almost entirely fewer spurious short possessions: on the four fitted windows the
 predicted segment count fell from 80 to 70 and the spurious ones from 54 to 43 with the matched
 count unchanged; full-match possessions fell from 279 to 225. The direction is the one the public
 window alone also rewards, which is why we had refused to follow it before the labels existed.
 
-On the seven windows the submitted file scores spellF1 0.555 (5-95% bootstrap 0.48 to 0.63) and
-macroF1 0.842; the detector variant 0.536 (0.46 to 0.61) and 0.849.
+On the seven windows the submitted file scores spellF1 0.580 (5-95% bootstrap 0.50 to 0.66) and
+macroF1 0.850; the detector variant 0.533 (0.45 to 0.61) and 0.851.
 
 ## 6. Limitations
 

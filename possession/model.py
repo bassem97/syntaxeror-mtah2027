@@ -298,7 +298,7 @@ def argparser():
     ap.add_argument("--out-hold-s", type=float, default=3.0, help="seconds of held dead evidence after the ball is seen out")
     ap.add_argument("--out-hold-w", type=float, default=2.0)
     ap.add_argument("--ctrl-soft", type=float, default=0.0, help="metres; >0 switches to distance-weighted control evidence")
-    ap.add_argument("--match-w", type=float, default=0.5, help="weight of the velocity-match (ball carrier) evidence")
+    ap.add_argument("--match-w", type=float, default=0.0, help="weight of the velocity-match (ball carrier) evidence")
     ap.add_argument("--shape-w", type=float, default=0.15, help="weight of the team-spread evidence")
     ap.add_argument("--shape-invis-only", type=int, default=1, help="1: shape evidence only on frames without a ball")
     ap.add_argument("--restart-w", type=float, default=0.5)
