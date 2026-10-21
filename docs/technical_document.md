@@ -120,13 +120,21 @@ where the tracker has nothing. Everything is in `vision/`.
   both ends. On hidden tracked stretches it recovers 85% of frames, 82% of them within 32 px, about
   a metre. Long gaps of 15 to 30 s are almost all stoppages; the valuable gaps are the 5 to 10 s
   ones in live play.
-- **Effect.** With the filled ball on the internal validation set (13.5 min, 34 possessions):
-  macroF1 0.829 to 0.851, spellF1 0.491 to 0.520. On the public window spellF1 0.546 to 0.563 and
-  macroF1 0.890 to 0.873. A gain, within the noise of 34 possessions.
+- **Label quality was the real problem.** The first detector's localisation plateaued at 59%
+  from the first epoch whatever it was trained on. A human check of 46 isolated crops explained
+  it: the blob-refined point was on the ball in 28 of the 30 crops where a ball was visible, but
+  in 16 crops there was no ball anywhere near the tracked position. Dropping frames without a
+  clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
+- **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
+  fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill on the internal validation
+  set (13.5 min, 34 possessions): macroF1 0.829 to 0.845, spellF1 0.491 to 0.504. On the public
+  window spellF1 0.546 to 0.563 and macroF1 0.890 to 0.873. Full-match possessions 279 to 287.
+  A small gain, within the noise of 34 possessions.
 
-What limits it is label quality: the detector's localisation plateaus at the first epoch whatever
-the training set, which is the signature of labels that are not on the ball. A human check of the
-auto-labels is the next step; a few hundred hand-clicked balls would settle it.
+The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
+cannot see at all: a ball hidden in a crowd or in the air is lost to the detector exactly as it is
+to the tracker. A test set of hand-clicked balls on frames the tracker lost would show how much
+is left there.
 
 ## 3. Possession rules implemented
 

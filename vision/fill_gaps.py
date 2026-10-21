@@ -196,7 +196,7 @@ def main():
     ap.add_argument("--base-px", type=float, default=40)
     ap.add_argument("--grow-px", type=float, default=4)
     ap.add_argument("--cap-frames", type=int, default=40)
-    ap.add_argument("--min-score", type=float, default=0.3)
+    ap.add_argument("--min-score", type=float, default=0.4)
     ap.add_argument("--max-gap-s", type=float, default=8)
     ap.add_argument("--method", default="track", choices=["track", "interp"])
     ap.add_argument("--max-step", type=float, default=30, help="track: typical ball movement per frame, px")

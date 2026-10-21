@@ -29,7 +29,7 @@ python vision/eval_track.py --start 11185 --end 18684 2>&1 | grep -v Warning
 
 echo "--- 5/8 gap filling (tracker) + simulated-gap check ---"
 python vision/fill_gaps.py --simulate 150 --gap-frames 100-250 --method track --max-gap-s 30 2>&1 | grep -v Warning
-python vision/fill_gaps.py --method track --max-gap-s 30 2>&1 | grep -v Warning
+python vision/fill_gaps.py --method track --max-gap-s 30 --min-score 0.4 2>&1 | grep -v Warning
 
 echo "--- 6/8 possession features with the filled ball ---"
 rm -f "$C/tactical_features_detector.npz"
