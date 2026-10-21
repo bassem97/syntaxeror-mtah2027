@@ -14,6 +14,8 @@ is not committed.
 | W1 | 50000–57499 | first half, about minute 26 |
 | W2 | 115000–122499 | second half, about minute 4 |
 | W3 | 166000–173499 | second half, about minute 37 |
+| W4 | 68000–75499 | first half, about minute 38, stoppage-heavy |
+| W5 | 143000–150499 | second half, about minute 20 |
 
 Each labeller does the calibration window before any real window. Score your calibration marks
 against the public truth with the organisers' scorer (below): `macroF1` above 0.95 and every true
@@ -94,7 +96,7 @@ python labeling/marks_to_gt.py labeling/data/marks_all.csv --window 50000-57499 
 Merge several windows, and the public truth, into the internal set:
 
 ```bash
-python labeling/marks_to_gt.py labeling/data/marks_all.csv --window 50000-57499 --window 115000-122499 --window 166000-173499 --public ../mtah/evaluation/gt/BAR-ATH_possession_gt_public.csv -o labeling/data/gt_internal.csv
+python labeling/marks_to_gt.py labeling/data/marks_all.csv --window 50000-57499 --window 115000-122499 --window 166000-173499 --window 68000-75499 --window 143000-150499 --public ../mtah/evaluation/gt/BAR-ATH_possession_gt_public.csv -o labeling/data/gt_internal.csv
 ```
 
 Score the model, or a labeller's calibration marks exported through the same converter, with the
