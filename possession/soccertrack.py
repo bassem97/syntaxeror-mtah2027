@@ -34,10 +34,17 @@ from .features import derive
 
 FPS = 25
 LEN, WID = 105.0, 68.0
-POSSESSION = {"Pass", "Drive", "Header", "High Pass", "Cross", "Throw In", "Shot", "Free Kick",
-              "Ball Player Block", "Player Successful Tackle"}
-DEAD = {"Out", "Goal"}
-RESTARTS = {"Free Kick", "Throw In"}
+POSSESSION = {"PASS", "DRIVE", "HEADER", "HIGH PASS", "CROSS", "THROW IN", "SHOT", "FREE KICK",
+              "BALL PLAYER BLOCK", "PLAYER SUCCESSFUL TACKLE"}
+DEAD = {"OUT", "GOAL"}
+RESTARTS = {"FREE KICK", "THROW IN"}
+PARSED = {}          # (match, "1st"/"2nd") -> parsed tracks, to re-convert without re-parsing
+
+
+def _smooth(a, w):
+    """Centred rolling mean over w frames, NaN-aware (positions here are quantised or jittery)."""
+    import pandas as pd
+    return pd.Series(a).rolling(w, center=True, min_periods=1).mean().values
 
 
 def stream_half(path):
@@ -79,6 +86,8 @@ def half_arrays(tracks, n):
             ok = (fr >= 0) & (fr < n)
             arr[fr[ok], k, 0] = (np.array(t["x"])[ok] + LEN / 2) / LEN     # metres from centre -> 0..1
             arr[fr[ok], k, 1] = (np.array(t["y"])[ok] + WID / 2) / WID
+            arr[:, k, 0] = _smooth(arr[:, k, 0], 5)                          # per-frame boxes jitter
+            arr[:, k, 1] = _smooth(arr[:, k, 1], 5)
         xm, ym = arr[:, :, 0] * LEN, arr[:, :, 1] * WID
         sp = np.full_like(xm, np.nan)
         sp[2:-2] = np.sqrt((xm[4:] - xm[:-4]) ** 2 + (ym[4:] - ym[:-4]) ** 2) * FPS / 4
@@ -93,6 +102,7 @@ def labels_from_events(events, n, side_is_home):
     ev = sorted(events)
     state, cursor, prev_frame = None, 0, None
     for frame, label, side in ev:
+        label = label.upper()
         t = frame - 1
         team = "H" if side_is_home.get(side) else "A"
         if state is not None:
@@ -134,9 +144,60 @@ def load_ball(path, n):
         x, y = a[:, 0], a[:, 1]
     ball = np.full((n, 2), np.nan)
     m = min(n, len(x))
-    ball[:m, 0] = (x[:m] + LEN / 2) / LEN
-    ball[:m, 1] = (y[:m] + WID / 2) / WID
+    x, y = x[:m].astype(float), y[:m].astype(float)
+    if "status" in z:
+        bad = z["status"][:m] < 0
+        x[bad], y[bad] = np.nan, np.nan
+    # the reconstruction is quantised to 1.05 m steps held for a few frames: smooth it back into
+    # the straight constant-speed lines it describes
+    ball[:m, 0] = (_smooth(x, 9) + LEN / 2) / LEN
+    ball[:m, 1] = (_smooth(y, 9) + WID / 2) / WID
     return ball, keys
+
+
+def rebuild_ball(tracks, events, n):
+    """Ball from the actions and the tracks: at a tagged action the ball is at the actor; between
+    two actions by the same player it stays at that player's feet (a drive, a carry); between two
+    different players it travels in a straight line from one to the other. The released ball
+    track interpolates every interval in a straight line, which leaves a dribbling player's ball
+    metres behind him. Frames before the first action and after the last are left empty."""
+    pos = {}
+    for t in tracks.values():
+        if t["player_id"] is None:
+            continue
+        d = pos.setdefault(t["player_id"], {})
+        for f, x, y in zip(t["frames"], t["x"], t["y"]):
+            d[f] = (x, y)
+    anchors = []
+    for frame, label, side, pid in events:
+        if pid is None:
+            continue
+        xy = pos.get(pid, {}).get(frame)
+        if xy is None:
+            continue
+        anchors.append((frame, pid, xy, label.upper()))
+    ball = np.full((n, 2), np.nan)
+    for (f1, p1, (x1, y1), l1), (f2, p2, (x2, y2), l2) in zip(anchors, anchors[1:]):
+        a, b = f1 - 1, min(f2 - 1, n - 1)
+        if b <= a:
+            continue
+        if l1 in DEAD:
+            # out of play: the ball is wherever it went, unseen, until it is placed for the restart
+            placed = max(a, b - 2 * FPS)
+            ball[placed:b + 1] = (x2, y2)
+            continue
+        if p1 == p2:
+            for f in range(a, b + 1):
+                xy = pos[p1].get(f + 1)
+                if xy is not None:
+                    ball[f] = xy
+        else:
+            w = np.linspace(0, 1, b - a + 1)
+            ball[a:b + 1, 0] = x1 + (x2 - x1) * w
+            ball[a:b + 1, 1] = y1 + (y2 - y1) * w
+    ball[:, 0] = (ball[:, 0] + LEN / 2) / LEN
+    ball[:, 1] = (ball[:, 1] + WID / 2) / WID
+    return ball
 
 
 def convert_match(root, match, out, stats_path, keep_json=False):
@@ -145,7 +206,7 @@ def convert_match(root, match, out, stats_path, keep_json=False):
     home_ids = None
     for h, tag in ((1, "1st"), (2, "2nd")):
         gpath = os.path.join(root, "gsr", match, "{}_{}.json".format(match, tag))
-        tracks = stream_half(gpath)
+        tracks = PARSED.get((match, tag)) or stream_half(gpath)
         n = max(f for t in tracks.values() for f in t["frames"])
         sides = half_arrays(tracks, n)
         if home_ids is None:                      # home = the side defending the left goal in half 1
@@ -160,17 +221,23 @@ def convert_match(root, match, out, stats_path, keep_json=False):
         players = np.concatenate([sides[home_side][0], sides[away_side][0]], axis=1)
         is_home = np.array([True] * sides[home_side][0].shape[1] + [False] * sides[away_side][0].shape[1])
         events = []
-        for e in bas["annotations"]:
+        for e in bas.get("actions", bas.get("annotations", [])):
             half = int(str(e["gameTime"]).split(" - ")[0])
             if half != h:
                 continue
             frame = int(e["frame"]) if "frame" in e else int(round(int(e["position"]) / 40))
-            events.append((frame, e["label"], e["team"]))
-        lab = labels_from_events(events, n, side_is_home)
-        ball, keys = load_ball(os.path.join(root, "ball", "{}_{}_ball.npz".format(match, tag)), n)
+            pid = e.get("player_id")
+            try:
+                pid = int(pid)
+            except (TypeError, ValueError):
+                pid = None
+            events.append((frame, e["label"], e["team"], pid))
+        lab = labels_from_events([(f, l, sd) for f, l, sd, _ in events], n, side_is_home)
+        ball = rebuild_ball(tracks, events, n)
+        keys = "rebuilt from tracks"
         ball = degrade_ball(ball, stats_path, seed=int(match) + h)
         halves.append((players, is_home, ball, lab))
-        if not keep_json:
+        if not keep_json and os.path.exists(gpath):
             os.remove(gpath)
         print("  half {}: {} frames, {} tracks, {} events, ball keys {}".format(h, n, len(tracks), len(events), keys), flush=True)
     # stitch halves into one match with a frame gap of nothing: periods array keeps them apart
