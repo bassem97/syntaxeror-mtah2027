@@ -144,6 +144,7 @@ def train_mask(gt, windows, margin=10):
 def decode_periods(score, periods, p):
     """Decode a match given as (period, first_frame, last_frame) rows, 1-based frames."""
     labels = np.full(len(score), "X", dtype="<U1")
+    score = np.nan_to_num(score, nan=0.0)   # frames without tracking carry no evidence
     for _, a, b in periods:
         a, b = int(a) - 1, int(b) - 1
         hl = M.LABELS[M.viterbi(score[a:b + 1], p["team_cost"], p["dead_cost"], p["dead_exit"])]
