@@ -2,8 +2,7 @@
 
 Run once (about a minute), then everything else loads the cache in milliseconds:
 
-    python -m possession.features                       # tracker ball
-    python -m possession.features --variant detector    # + detector where the tracker lost it
+    python -m possession.features
 
 Arrays, all length n_frames (video frame index, 0-based):
   ball_x, ball_y      normalised 0-1, NaN when the ball is not tracked
@@ -24,7 +23,6 @@ import numpy as np
 from .games import DATA_DIR, GAME, GAMES, require, source_frames
 
 CACHE = os.path.join(DATA_DIR, "cache", "tactical_features.npz")
-DETECTOR = os.path.join(DATA_DIR, "cache", "ball_detector.npz")
 NEAR_M = 3.0
 
 
@@ -53,9 +51,8 @@ def parse_atd(raw_path, n_slots):
     return frames, players, ball
 
 
-def build(variant="tracker", score_min=0.5, detector_path=None):
-    """variant "tracker": the ball as the ATD tracks it. "detector": the same, with the frames the
-    tracker lost filled from vision/infer.py wherever the detector is confident (score_min)."""
+def build(variant="tracker"):
+    """The ball as the ATD tracks it; other variants are for experiments and share the cache naming."""
     meta_path, raw_path = require(["atd_meta", "atd_raw"])
     n = source_frames("tactical")
     length, width = GAMES[GAME]["pitch"]
@@ -64,12 +61,7 @@ def build(variant="tracker", score_min=0.5, detector_path=None):
     frames, players, ball = parse_atd(raw_path, len(is_home))
     assert len(frames) == n and frames[0] == 0 and frames[-1] == n - 1
     ball = ball.copy()
-    ball_src = np.where(np.isnan(ball[:, 0]), 0, 1).astype(np.int8)  # 0 none, 1 tracker, 2 detector
-    if variant == "detector":
-        d = np.load(detector_path or DETECTOR)
-        fill = np.isnan(ball[:, 0]) & (d["score"] >= score_min) & ~np.isnan(d["x"])
-        ball[fill, 0], ball[fill, 1] = d["x"][fill], d["y"][fill]
-        ball_src[fill] = 2
+    ball_src = np.where(np.isnan(ball[:, 0]), 0, 1).astype(np.int8)  # 0 none, 1 tracker
 
     px = players[:, :, 0] * length
     py = players[:, :, 1] * width
@@ -142,16 +134,10 @@ if __name__ == "__main__":
     import warnings
     warnings.simplefilter("ignore")  # nanmean over empty frames at halftime
     ap = argparse.ArgumentParser()
-    ap.add_argument("--variant", default="tracker", choices=["tracker", "detector"])
-    ap.add_argument("--score-min", type=float, default=0.5, help="detector confidence needed to fill a frame")
-    ap.add_argument("--detector-file", help="detector track to use instead of cache/ball_detector.npz")
     args = ap.parse_args()
-    path = build(args.variant, args.score_min, args.detector_file)
+    path = build()
     f = dict(np.load(path))
     vis = ~np.isnan(f["ball_x"])
     print("cached", path)
-    if args.variant == "detector":
-        print("ball from tracker {:.1f}%, from detector {:.1f}%, none {:.1f}%".format(
-            *(100 * np.mean(f["ball_src"] == k) for k in (1, 2, 0))))
     print("ball visible {:.1f}%  mean players {:.1f}".format(100 * vis.mean(), np.nanmean(f["n_players"])))
     print("median d_home {:.2f} m  d_away {:.2f} m".format(np.nanmedian(f["d_home"]), np.nanmedian(f["d_away"])))

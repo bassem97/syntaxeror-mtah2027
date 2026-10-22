@@ -4,16 +4,14 @@ Our submission for the [More than a Hack 2027](https://github.com/metrica-sports
 initial challenge: one possession label (`H` / `A` / `D` / `X`) for every frame of the tactical
 video of FC Barcelona vs Athletic Club, produced from the automatic tracking and the Smart Tagging.
 
-The method is a per-frame evidence model, hand-written terms plus a small gradient-boosted
-classifier trained on our own labels, decoded with a 3-state Viterbi, so possessions come out
+The method is a per-frame evidence model decoded with a 3-state Viterbi, so possessions come out
 as whole segments rather than as a majority vote over frames. It is described in
 [docs/technical_document.md](docs/technical_document.md).
 
 ## Reproduce the submission
 
-Requirements: Python 3.10 or newer, `numpy`, `pandas` and `lightgbm` (pinned in
-`requirements.txt`). The file was generated with Python 3.14.6, numpy 2.4.6, pandas 3.0.6 and
-lightgbm 4.7.0.
+Requirements: Python 3.10 or newer, `numpy` and `pandas` (pinned in `requirements.txt`). The file
+was generated with Python 3.14.6, numpy 2.4.6 and pandas 3.0.6.
 
 ```bash
 pip install -r requirements.txt
@@ -55,17 +53,9 @@ make_submission.py          the one command
 possession/
   features.py               tracking file -> cached per-frame features (ball, distances, speeds)
   model.py                  evidence terms + Viterbi decoder; all parameters are CLI flags
-  learned.py                gradient-boosted per-frame classifier on top of the evidence terms
-models/                     the three trained classifiers the submission decodes with
   touches.py                ball touches from velocity changes, attributed to the nearest team
   smart_tagging.py          Smart Tagging XML reader (vendored from the organisers' repo, MIT)
   games.py                  match constants and asset paths (vendored, MIT; one path edit)
-vision/                     ball detector (work in progress, needs requirements-vision.txt and a GPU)
-  autolabels.py             tracked ball -> pixel labels through the homography
-  check_labels.py           numeric check of those labels against the image
-  dataset.py                crops around the ball and without it
-  model.py, train.py        small CenterNet-style heatmap detector and its training
-  infer.py                  second ball track for the whole match
 labeling/                   hand-labelling kit for the internal validation set (see its README)
 analysis/
   counts.py                 full-match possession / stoppage counts of a submission
@@ -74,8 +64,8 @@ analysis/
 docs/technical_document.md  the technical document
 ```
 
-Every model parameter is a flag on `python -m possession.model --help` (hand evidence only) and
-`python -m possession.learned --help`. The defaults are the submission.
+Every model parameter is a flag on `python -m possession.model --help`. The defaults are the
+submission.
 
 ## Licence
 

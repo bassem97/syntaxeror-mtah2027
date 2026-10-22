@@ -46,7 +46,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gt", required=True)
     ap.add_argument("--windows", required=True, help="comma-separated first-last frames")
-    ap.add_argument("--ball", default="tracker", choices=["tracker", "detector"])
+    ap.add_argument("--ball", default="tracker")
     ap.add_argument("--max", type=int, default=0, help="limit the number of settings (0 = all)")
     ap.add_argument("--grid", help='JSON overriding GRID entries, e.g. {"ctrl_m": [0.9, 1.2]}')
     ap.add_argument("--tag", default="", help="suffix for the output csv")

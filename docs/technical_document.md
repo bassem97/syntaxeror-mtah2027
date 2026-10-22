@@ -112,44 +112,15 @@ kick from standstill, so the hold ran for half a minute. Distance-weighted contr
 radius: it only lengthened possessions. Team shape on every frame: it is a slow signal and merged
 possessions, so it is restricted to frames without a ball.
 
-### A second ball track from the video (work in progress)
+### A second ball track from the video: built, then withdrawn
 
-The tracker loses the ball on 41% of graded frames, and those are the frames that matter: duels,
-crowded boxes, aerial balls. We train a small ball detector on the tactical video and use it only
-where the tracker has nothing. Everything is in `vision/`.
-
-- **Labels for free.** On the 113,000 frames where the tracker has the ball, projecting it through
-  the frame's homography gives a pixel position. A numeric check against the image (the ball is
-  the strongest small bright blob on grass) shows the projection is unbiased but noisy: on
-  isolated balls it is more than 8 px off about 40% of the time. Labels snap to the blob where one
-  is clear, otherwise keep the projection.
-- **Detector.** A 300k-parameter fully convolutional heatmap network in plain PyTorch, stride 4,
-  trained on 256 px crops (14k with a ball, 14k without, plus 20k hard negatives mined from the
-  detector's own false peaks: socks, boots, line crossings). Runs on full 1080p frames and emits
-  the five strongest peaks per frame.
-- **Gap filling.** The tracker knows the ball before and after every gap, so the detector's peaks
-  are tracked through the gap by dynamic programming with a motion-smoothness cost, anchored at
-  both ends. On hidden tracked stretches it recovers 85% of frames, 82% of them within 32 px, about
-  a metre. Long gaps of 15 to 30 s are almost all stoppages; the valuable gaps are the 5 to 10 s
-  ones in live play.
-- **Label quality was the real problem.** The first detector's localisation plateaued at 59%
-  from the first epoch whatever it was trained on. A human check of 46 isolated crops explained
-  it: the blob-refined point was on the ball in 28 of the 30 crops where a ball was visible, but
-  in 16 crops there was no ball anywhere near the tracked position. Dropping frames without a
-  clear blob (29% of them) took held-out localisation to 82%, 86% on isolated balls.
-- **Effect, whole match.** The filler's confidence threshold matters: at 0.3 the fills add
-  fragmentation and cost spellF1, at 0.4 they help. With the 0.4 fill and the decoder of §5 on
-  the internal validation set as it then was (33.5 min, 69 possessions), hand evidence only:
-  macroF1 0.855 to 0.856, spellF1 0.592 to 0.544. On the public window spellF1 0.606 to 0.627 and macroF1 0.911 to 0.895. Full-match
-  possessions 206 to 216. Before the decoder was fitted the detector led on spellF1 by 0.013 on
-  34 possessions; with the fitted decoder it trails. The 5-95% bootstrap intervals on the internal
-  set are 0.46 to 0.63 with the detector and 0.51 to 0.68 without: the extra ball positions add
-  short spurious possessions that the decoder no longer smooths away.
-
-The detector is therefore a modest lever, not the decisive one. Its ceiling is the frames it
-cannot see at all: a ball hidden in a crowd or in the air is lost to the detector exactly as it is
-to the tracker. A test set of hand-clicked balls on frames the tracker lost would show how much
-is left there.
+The tracker loses the ball on 41% of frames, so we trained a small heatmap detector on the
+tactical video to fill those frames, using the provided tracking projected through the
+homography as its labels. It worked (held-out localisation within 8 px on 82% of frames) and
+helped a little, but the organisers confirmed that labelling the provided match to train a
+model is not allowed, whatever the labels are derived from, so it is not part of the
+submission and its code is not in this repository. A detector trained on external, documented
+data would be allowed; we did not build one.
 
 ## 3. Possession rules implemented
 
@@ -164,22 +135,14 @@ is left there.
 
 ## 4. Results on the public window
 
-The public window is one of the ten windows the classifier of §5 is trained on, so the
-submitted file's score there is in-sample and says nothing. The honest number is the held-out
-one: a classifier trained on the other nine windows scores spellF1 0.384 and macroF1 0.871 on
-it, against 0.606 and 0.911 for the hand-written evidence alone. This window is the fastest five
-minutes of the match and the classifier under-segments it (8 possessions for 17); on the nine
-other windows, 90 possessions, it wins. §5 has the full table and the reasoning.
-
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror, hand evidence only (`python -m possession.model`) | 0.911 | 0.606 | 18 |
-| SyntaxEror, submitted (hand + learned), held out on this window | 0.871 | 0.384 | 8 |
+| SyntaxEror | 0.911 | 0.606 | 18 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the submitted file contains 186 possessions of mean 19 s and 99 stoppages of
-mean 28 s, with 44% of graded frames dead (the hand-only decode: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+On the full match the file contains 206 possessions of mean 18 s and 99 stoppages of mean 26 s,
+with 41% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
 
@@ -191,7 +154,7 @@ and the organisers say as much. We hand-labelled nine more windows with the kit 
 3.5 minutes after the public window), touch-level, following the convention written in `labeling/README.md`. The
 labeller first labelled the public window blind and scored 0.96 macroF1 against the truth. With
 the public window that is 48.5 minutes and 107 possessions. The labels are validation data only;
-they are never an input to the algorithm, which the rules allow.
+they are never an input to the algorithm.
 
 `analysis/fit.py` decodes the model over a grid of its five main parameters (team-switch cost,
 dead-switch cost, control radius, carry weight, touch weight) and scores every window with the
@@ -247,52 +210,15 @@ On those seven windows the hand-evidence decode scores spellF1 0.592 (5-95% boot
 0.68) and macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856. The submitted
 file adds the learned evidence below.
 
-### Learned evidence on top of the hand-written terms
+### A learned evidence term: built, then withdrawn
 
-With ten labelled windows the labels can train as well as validate. `possession/learned.py`
-fits a gradient-boosted classifier (LightGBM, 300 trees of 15 leaves, strong regularisation) that
-gives every frame a probability of H, A and D from 90 columns: the tracking features, the
-hand-written evidence terms, and centred rolling means of each over 1, 2, 4 and 10 seconds. The
-frames within 10 of a hand-labelled transition are left out of training (the labels are only good
-to a third of a second there), every window is also fed mirrored (home and away swapped) so no
-team bias can be learned, and three seeds are averaged. The classifier's log-probabilities, at
-weight 0.35, are added to the hand-written evidence and decoded by the same Viterbi with the same
-costs and the same switch delay.
-
-Everything below is held out: each window is scored with a classifier that never saw it, three
-seeds averaged. The windows are in the order public, the 3.5 min after it, first-half minutes 26
-and 38, second-half minutes 4, 20 and 37, then the last three labelled: first-half minute 13,
-second-half minutes 10 and 44.
-
-| evidence | per-window spellF1 | pooled spellF1 (5-95%) | macroF1 |
-|---|---|---|---|
-| hand-written | 0.606 0.550 0.574 0.500 0.678 0.740 0.463 0.462 0.432 0.487 | 0.546 (0.48-0.61) | 0.805 |
-| classifier alone, weight 0.5 | 0.365 0.492 0.511 0.400 0.838 0.880 0.657 0.477 0.517 0.504 | 0.554 (0.47-0.64) | 0.837 |
-| hand + classifier x0.35 (submitted) | 0.384 0.720 0.678 0.436 0.781 1.000 0.600 0.587 0.462 0.487 | 0.596 (0.52-0.66) | 0.844 |
-
-The last three windows were labelled after the first version of the classifier was built, so
-they were also a fresh test of the committed pipeline before retraining: on them the hand
-evidence scores spellF1 0.459 and macroF1 0.692, the pipeline trained on the seven earlier
-windows 0.525 and 0.759.
-
-What the classifier adds is where the ball is lost and around stoppages: its most important
-inputs are the 10-second means of the team and moving-ball evidence. What it lacks is the hand
-control cue's sharpness at quick exchanges, and the public window, the fastest five minutes of
-the match, is where that shows: held out, the sum scores 0.384 there against 0.606 for the hand
-evidence alone, holding each team about six seconds too long at exchanges. Giving the classifier
-only the dead-ball channel keeps that window (0.627) but loses almost all of the pooled gain
-(0.550); the team channel is where the gain is. We go with the pooled estimate over 107
-possessions and say so here. A second classifier on 1-second context only, meant to react
-faster at exchanges, scores 0.369 on that window alone and 0.368 to 0.384 in every blend with
-the first, while lowering the pooled score: the loss there is not a matter of context length.
-Dropping the long context windows loses the gain, the weight and the
-decoder costs sit on a flat plateau (weights 0.35 to 0.5, costs 40 to 50), single seeds score
-within 0.02 of each other, and the labeller's known offset does not matter: shifting the hand
-labels by it before training changes nothing.
-
-The hand labels themselves are not distributed with the code; the three trained models are, in
-`models/`, and decoding from them is deterministic. They were trained on our own labels of 48.5
-minutes of this match, which the rules allow.
+With ten labelled windows we also trained a gradient-boosted classifier on them and added its
+log-probabilities to the hand-written evidence. Held out window by window it lifted pooled
+spellF1 from 0.546 to 0.596 and macroF1 from 0.805 to 0.844. The organisers' clarification
+rules it out: a model may not be trained on annotations of the provided match. It is not part
+of the submission and its code is not in this repository. The hand labels are used for
+validation and for choosing parameter values only; they are never an input to the pipeline, and
+they are not distributed.
 
 ## 6. Limitations
 
@@ -313,11 +239,9 @@ minutes of this match, which the rules allow.
 ## 7. Reproduction
 
 ```bash
-pip install -r requirements.txt     # numpy, pandas, lightgbm
+pip install -r requirements.txt     # numpy, pandas
 python make_submission.py           # -> out/SyntaxEror.csv
 ```
 
-Reads only the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`, and the
-three classifier files in `models/`. The run is deterministic; a clean clone on an empty data
-folder produces a byte-identical file. `python -m possession.model` writes the hand-evidence-only
-decode, and `python -m possession.learned --fit` retrains the classifier from the labels.
+Reads only the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`. The
+run is deterministic; a clean clone on an empty data folder produces a byte-identical file.
