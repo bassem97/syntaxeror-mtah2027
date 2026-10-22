@@ -168,9 +168,11 @@ def main(argv=None):
     ap.add_argument("--external", help="folder of external feature files with labels (possession/external.py)")
     ap.add_argument("--fit", help="train on the external games and save the models under this prefix")
     ap.add_argument("--model", help="prefix of the saved models to decode the whole match with")
-    ap.add_argument("--w", type=float, default=0.35, help="scale of the log-probabilities as evidence")
+    ap.add_argument("--w", type=float, default=0.15, help="scale of the log-probabilities as evidence")
     ap.add_argument("--hand-w", type=float, default=1.0, help="scale of the hand-written evidence (0 = classifier only)")
     ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--games", default="metrica_g1,metrica_g2", help="external games to train on (game 3 tags few fouls and hurts)")
+    ap.add_argument("--margin", type=int, default=25, help="frames around an event-derived transition left out of training")
     ap.add_argument("--gt", help="internal ground truth to report on (validation only)")
     ap.add_argument("--windows", help="comma-separated first-last frames of the validation windows")
     ap.add_argument("--name", default="SyntaxEror_learned")
@@ -196,7 +198,7 @@ def main(argv=None):
 
     sys.path.insert(0, os.path.join(ROOT, "..", "mtah", "evaluation"))
     import possession_metrics as pm
-    games = external_tables(args.external, p)
+    games = [g for g in external_tables(args.external, p) if g[0] in args.games.split(",")]
     # 1. are the derived labels consistent with the challenge's convention? score the hand model on them
     for name, fe, _, y in games:
         lab = decode_periods(M.emissions(fe, dict(p, events=[])), fe["periods"], p)
@@ -212,7 +214,7 @@ def main(argv=None):
         m = y >= 0
         ch = np.where(y[1:] != y[:-1])[0] + 1
         for i in ch:
-            m[max(0, i - 10):i + 10] = False
+            m[max(0, i - args.margin):i + args.margin] = False
         mask[off:off + len(y)] = m
         off += len(y)
     print("training on {} external frames x2 (mirrored)".format(int(mask.sum())), flush=True)
@@ -225,7 +227,7 @@ def main(argv=None):
     # 3. validation on the challenge match: public window and the hand-labelled windows
     proba = np.mean([b.predict(df.values) for b in boosters], axis=0)
     pub = pd.read_csv(os.path.join(ROOT, "..", "mtah", "evaluation", "gt", "BAR-ATH_possession_gt_public.csv"))["label"].values
-    rows = [("hand", hand)] + [("hand + learned x{}".format(w), hand + emissions_from(proba, w)) for w in (0.2, 0.35, 0.5, 0.75)] + [("learned alone x0.5", emissions_from(proba, 0.5))]
+    rows = [("hand", hand)] + [("hand + learned x{}".format(w), hand + emissions_from(proba, w)) for w in (0.1, 0.15, 0.2, 0.3)] + [("learned alone x0.5", emissions_from(proba, 0.5))]
     gt = pd.read_csv(args.gt)["label"].values if args.gt else None
     windows = [tuple(int(x) for x in w.split("-")) for w in args.windows.split(",")] if args.windows else []
     for name, sc in rows:
@@ -238,8 +240,8 @@ def main(argv=None):
                 g = np.full(len(gt), "X", dtype="<U1")
                 g[a:b + 1] = gt[a:b + 1]
                 per.append(pm.evaluate(pm.label_codes(g), pm.label_codes(lab), bootstrap_n=0)["spell_f1_mean"])
-            r = pm.evaluate(pm.label_codes(gt), pm.label_codes(lab), bootstrap_n=0)
-            line += " | windows pooled spell {:.3f} macro {:.3f} [{}]".format(r["spell_f1_mean"], r["macro_f1"], " ".join("%.2f" % x for x in per))
+            r = pm.evaluate(pm.label_codes(gt), pm.label_codes(lab), bootstrap_n=500)
+            line += " | windows pooled spell {:.3f} [{:.2f}-{:.2f}] macro {:.3f} [{}]".format(r["spell_f1_mean"], r["spell_bootstrap_low"], r["spell_bootstrap_high"], r["macro_f1"], " ".join("%.2f" % x for x in per))
         print(line, flush=True)
 
 

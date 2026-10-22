@@ -112,6 +112,22 @@ kick from standstill, so the hold ran for half a minute. Distance-weighted contr
 radius: it only lengthened possessions. Team shape on every frame: it is a slow signal and merged
 possessions, so it is restricted to frames without a ball.
 
+### External training data: Metrica Sports' public sample games
+
+The only data from outside the bundle are Metrica Sports' three public sample games
+(https://github.com/metrica-sports/sample-data: tracking at 25 fps and events, anonymised,
+"please acknowledge the source"). `possession/external.py` turns each game into our feature
+layout and derives a per-frame label from its events: a pass, carry, recovery, shot, set piece
+or ball lost puts the ball with its team; the ball going out, a goal, a foul, a card, an offside
+or the end of a half makes it dead from that event's end; the next set piece (goal kicks are
+tagged as passes) ends the dead ball. These labels train the classifier of §5. Their quality was
+checked by scoring our hand-written model against them: spellF1 0.50 and 0.52 on games 1 and 2,
+the same range as on the challenge match, so they follow the same convention. Game 3's events
+record few fouls (12 against about 40 in the others) and its labels under-count stoppages;
+training on it hurt and it is left out. The sample games' tracking loses the ball on 39% of
+frames, almost exactly the 41% of the challenge match, which is why features learned there
+transfer.
+
 ### A second ball track from the video: built, then withdrawn
 
 The tracker loses the ball on 41% of frames, so we trained a small heatmap detector on the
@@ -137,12 +153,13 @@ data would be allowed; we did not build one.
 
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror | 0.911 | 0.606 | 18 |
+| SyntaxEror (hand evidence + classifier trained on other matches) | 0.882 | 0.600 | 13 |
+| hand evidence only (`python -m possession.model`) | 0.911 | 0.606 | 18 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 206 possessions of mean 18 s and 99 stoppages of mean 26 s,
-with 41% of graded frames dead. Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+On the full match the file contains 238 possessions of mean 15 s and 105 stoppages of mean 27 s,
+with 45% of graded frames dead (hand evidence only: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
 
@@ -210,15 +227,39 @@ On those seven windows the hand-evidence decode scores spellF1 0.592 (5-95% boot
 0.68) and macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856. The submitted
 file adds the learned evidence below.
 
-### A learned evidence term: built, then withdrawn
+### A learned evidence term, trained on other matches
 
-With ten labelled windows we also trained a gradient-boosted classifier on them and added its
-log-probabilities to the hand-written evidence. Held out window by window it lifted pooled
-spellF1 from 0.546 to 0.596 and macroF1 from 0.805 to 0.844. The organisers' clarification
-rules it out: a model may not be trained on annotations of the provided match. It is not part
-of the submission and its code is not in this repository. The hand labels are used for
-validation and for choosing parameter values only; they are never an input to the pipeline, and
-they are not distributed.
+A classifier trained on our hand labels of this match lifted held-out spellF1 from 0.546 to
+0.596, and the organisers' clarification ruled it out: a model may not be trained on annotations
+of the provided match. The same recipe trained on Metrica's sample games 1 and 2 (§2) is
+allowed, and is what the submission uses.
+
+`possession/learned.py` fits a gradient-boosted classifier (LightGBM, 300 trees of 15 leaves,
+strong regularisation, three seeds averaged) that gives every frame a probability of H, A and D
+from 90 columns: the tracking features, the hand-written evidence terms, and centred rolling
+means of each over 1, 2, 4 and 10 seconds. Frames within 25 of an event-derived transition are
+left out (event times are coarse), and every game is also fed mirrored (home and away swapped)
+so no team bias can be learned. Its log-probabilities, at weight 0.15, are added to the
+hand-written evidence and decoded by the same Viterbi with the same costs and switch delay.
+Nothing from the challenge match enters training, so every number below is a fair test.
+
+| evidence | public window spellF1 / macroF1 | ten hand-labelled windows, pooled spellF1 (5-95%) / macroF1 |
+|---|---|---|
+| hand-written | 0.606 / 0.911 | 0.546 (0.48-0.62) / 0.805 |
+| hand + classifier x0.15 (submitted) | 0.600 / 0.882 | 0.576 (0.52-0.63) / 0.825 |
+| classifier alone x0.5 | 0.471 / 0.766 | 0.516 (0.45-0.58) / 0.794 |
+
+Six of the ten windows improve, three get worse, one is flat. The gain is about half of what the
+in-match classifier gave, which is the price of the domain shift between matches and of labels
+timed by events rather than by a person. What did not help: adding game 3 (its missing fouls
+teach the wrong dead-ball rate), weights above 0.15, more or deeper trees (600 or 1000 rounds,
+31 or 63 leaves), a faster learning rate, a 10-frame margin instead of 25. The classifier alone
+under-segments the fast public window exactly as the in-match one did; the hand control cue is
+kept for that reason.
+
+The three trained models are in `models/`, decoding from them is deterministic, and
+`python -m possession.learned --external <folder> --fit models/learned` retrains them from the
+sample games.
 
 ## 6. Limitations
 
@@ -239,9 +280,13 @@ they are not distributed.
 ## 7. Reproduction
 
 ```bash
-pip install -r requirements.txt     # numpy, pandas
+pip install -r requirements.txt     # numpy, pandas, lightgbm
 python make_submission.py           # -> out/SyntaxEror.csv
 ```
 
-Reads only the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`. The
-run is deterministic; a clean clone on an empty data folder produces a byte-identical file.
+Reads the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`, and the
+three classifier files in `models/`. The run is deterministic; a clean clone on an empty data
+folder produces a byte-identical file. `python -m possession.model` writes the hand-evidence-only
+decode. Retraining the classifier needs the Metrica sample games cloned next to the repository
+(`python -m possession.external --data ../metrica-sample-data/data --out ../external-cache`, then
+`python -m possession.learned --external ../external-cache --fit models/learned`).
