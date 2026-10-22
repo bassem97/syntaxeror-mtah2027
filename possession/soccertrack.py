@@ -248,7 +248,7 @@ def convert_match(root, match, out, stats_path, keep_json=False):
         pad = np.full((players.shape[0], slots - players.shape[1], 3), np.nan)
         parts.append(np.concatenate([players, pad], axis=1))
         if is_home_all is None:
-            is_home_all = np.concatenate([is_home, np.array([False] * (slots - len(is_home)))])
+            is_home_all = np.concatenate([is_home, np.zeros(slots - len(is_home), bool)])
         labs.append(lab)
         balls.append(ball)
         periods.append([k + 1, off + 1, off + players.shape[0]])
