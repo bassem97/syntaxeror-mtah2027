@@ -128,6 +128,19 @@ training on it hurt and it is left out. The sample games' tracking loses the bal
 frames, almost exactly the 41% of the challenge match, which is why features learned there
 transfer.
 
+### SoccerTrack v2: tried, no gain
+
+We also converted six of the ten matches of SoccerTrack v2 (CC BY 4.0, full-pitch player
+positions at 25 fps with team-labelled ball actions; `possession/soccertrack.py`). Its released
+pitch positions sit on a 1.05 m grid and its ball is reconstructed between actions, so we
+rebuilt the ball from the tracks (at the actor at each action, at the carrier's feet between two
+actions by the same player, unseen while out of play) and blanked it in runs drawn from the
+challenge tracking's gap lengths. Even so our hand-written model agrees with its labels at
+spellF1 0.30 and macroF1 0.65, against 0.50 and 0.85 on Metrica, and a classifier trained on it
+adds nothing: alone it scores below the Metrica one on every measure, and added to the Metrica
+games it moves the ten validation windows from 0.576 to 0.579 spellF1 while losing 0.01 macroF1.
+The data is not used.
+
 ### A second ball track from the video: built, then withdrawn
 
 The tracker loses the ball on 41% of frames, so we trained a small heatmap detector on the
