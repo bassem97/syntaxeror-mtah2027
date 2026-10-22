@@ -227,6 +227,24 @@ On those seven windows the hand-evidence decode scores spellF1 0.592 (5-95% boot
 0.68) and macroF1 0.855; the detector variant 0.544 (0.46 to 0.63) and 0.856. The submitted
 file adds the learned evidence below.
 
+### The same fit on the external games
+
+`analysis/fit_external.py` runs the same grid against the event-derived labels of the three
+Metrica sample games (190 minutes), which uses nothing from the challenge match. It confirms
+the two changes that matter most: the tempo floor (mean spellF1 over the games 0.493 without,
+0.518 with) and the 1.2 m control radius (best at every other setting). It is flat on the
+dead-ball cost and the switch delay, the latter expected since event times are only good to a
+second. It disagrees on one value: it prefers a team-switch cost of 30 to 45. That preference is
+a property of those labels, whose possessions are twice as fragmented as the organisers' truth
+(median 5 s against 11 s, because every ball lost and recovery is an event), and the setting it
+picks scores 0.471 on our ten windows against 0.546 for the current one.
+
+Should the organisers rule that parameter values may not be chosen against our own labels of
+this match, the fallback is the setting fitted on the external games alone (team cost 30, dead
+cost 40, control radius 1.2 m, carry 0.25, tempo floor, no delay), which with the classifier
+scores spellF1 0.524 and macroF1 0.809 on the ten windows and 0.562 / 0.870 on the public
+window; the values set by hand before any labelling score 0.500 / 0.795 and 0.521 / 0.850.
+
 ### A learned evidence term, trained on other matches
 
 A classifier trained on our hand labels of this match lifted held-out spellF1 from 0.546 to
