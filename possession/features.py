@@ -51,18 +51,9 @@ def parse_atd(raw_path, n_slots):
     return frames, players, ball
 
 
-def build(variant="tracker"):
-    """The ball as the ATD tracks it; other variants are for experiments and share the cache naming."""
-    meta_path, raw_path = require(["atd_meta", "atd_raw"])
-    n = source_frames("tactical")
-    length, width = GAMES[GAME]["pitch"]
-    is_home = team_of_each_track(meta_path)
-
-    frames, players, ball = parse_atd(raw_path, len(is_home))
-    assert len(frames) == n and frames[0] == 0 and frames[-1] == n - 1
-    ball = ball.copy()
-    ball_src = np.where(np.isnan(ball[:, 0]), 0, 1).astype(np.int8)  # 0 none, 1 tracker
-
+def derive(players, ball, is_home, length, width, fps):
+    """Per-frame features from positions: players[n, slots, 3] (x, y normalised 0-1, speed m/s),
+    ball[n, 2+] normalised, is_home[slots]. The same function serves any match in this layout."""
     px = players[:, :, 0] * length
     py = players[:, :, 1] * width
     ps = players[:, :, 2]
@@ -78,14 +69,15 @@ def build(variant="tracker"):
     n_home3 = (near & is_home[None, :]).sum(1)
     n_away3 = (near & ~is_home[None, :]).sum(1)
 
+    n = len(ball)
     ball_speed = np.full(n, np.nan)
-    step = np.sqrt(np.diff(bx) ** 2 + np.diff(by) ** 2) * GAMES[GAME]["fps"]
+    step = np.sqrt(np.diff(bx) ** 2 + np.diff(by) ** 2) * fps
     ball_speed[1:] = step
 
     # Who moves with the ball: velocity of every player and of the ball over +/- 2 frames, and per
     # team the best agreement between a nearby player's velocity and the ball's. A player carrying
     # the ball shares its velocity; a defender next to it usually does not.
-    fps = GAMES[GAME]["fps"]
+    fps = fps
     def velocity(a):
         v = np.full_like(a, np.nan)
         v[2:-2] = (a[4:] - a[:-4]) * fps / 4
@@ -109,16 +101,30 @@ def build(variant="tracker"):
     home_spread = np.nanmean(np.sqrt((hx - home_cx[:, None]) ** 2 + (hy - home_cy[:, None]) ** 2), axis=1)
     away_spread = np.nanmean(np.sqrt((ax - away_cx[:, None]) ** 2 + (ay - away_cy[:, None]) ** 2), axis=1)
 
+    return dict(ball_x=ball[:, 0], ball_y=ball[:, 1],
+                d_home=d_home, d_away=d_away, n_home3=n_home3, n_away3=n_away3,
+                mean_speed=np.nanmean(ps, axis=1), n_players=np.sum(~np.isnan(px), axis=1),
+                ball_speed=ball_speed, match_home=match_home, match_away=match_away,
+                home_cx=home_cx, away_cx=away_cx, home_spread=home_spread, away_spread=away_spread)
+
+
+def build(variant="tracker"):
+    """The ball as the ATD tracks it; other variants are for experiments and share the cache naming."""
+    meta_path, raw_path = require(["atd_meta", "atd_raw"])
+    n = source_frames("tactical")
+    length, width = GAMES[GAME]["pitch"]
+    is_home = team_of_each_track(meta_path)
+
+    frames, players, ball = parse_atd(raw_path, len(is_home))
+    assert len(frames) == n and frames[0] == 0 and frames[-1] == n - 1
+    ball = ball.copy()
+    ball_src = np.where(np.isnan(ball[:, 0]), 0, 1).astype(np.int8)  # 0 none, 1 tracker
+
+    arrays = derive(players, ball, is_home, length, width, GAMES[GAME]["fps"])
+    arrays["ball_src"] = ball_src
     out = cache_path(variant)
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    np.savez_compressed(out,
-                        ball_x=ball[:, 0], ball_y=ball[:, 1], ball_src=ball_src,
-                        d_home=d_home, d_away=d_away,
-                        n_home3=n_home3, n_away3=n_away3,
-                        mean_speed=np.nanmean(ps, axis=1),
-                        n_players=np.sum(~np.isnan(px), axis=1),
-                        ball_speed=ball_speed, match_home=match_home, match_away=match_away,
-                        home_cx=home_cx, away_cx=away_cx, home_spread=home_spread, away_spread=away_spread)
+    np.savez_compressed(out, **arrays)
     return out
 
 

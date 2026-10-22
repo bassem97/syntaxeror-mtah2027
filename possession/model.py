@@ -99,7 +99,9 @@ def evidence_parts(f, p):
         s_kick[i:i + 2 * FPS] = -p["kick_w"]
 
     s_goal = np.zeros(n)
-    ev = st.load()
+    ev = p.get("events")            # another match: pass its tags, or [] for none
+    if ev is None:
+        ev = st.load()
     goals = sorted(e["start_frame"] for e in ev if e["code"] == "GOALS")
     kickoffs = sorted(e["start_frame"] for e in ev
                       if e["code"] == "SET PIECES" and "kick off" in (e["tags"].get("Type") or "").lower())
