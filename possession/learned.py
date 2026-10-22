@@ -1,6 +1,7 @@
 """Learned per-frame emissions: a gradient-boosted classifier over the tracking features and the
-hand-written evidence terms, trained on OTHER matches (possession/external.py), decoded with the
-same Viterbi. Nothing from the challenge match is used in training.
+hand-written evidence terms, trained on OTHER matches (SkillCorner's open data through
+possession/skillcorner.py; Metrica's sample games through possession/external.py are the
+alternative), decoded with the same Viterbi. Nothing from the challenge match is used in training.
 
     python -m possession.learned --gt labeling/data/gt_internal.csv --windows a-b,c-d,...   # leave-one-window-out report
     python -m possession.learned --gt ... --windows ... --fit models/learned                 # train on all windows, save
@@ -169,10 +170,11 @@ def main(argv=None):
     ap.add_argument("--external", help="folder of external feature files with labels (possession/external.py)")
     ap.add_argument("--fit", help="train on the external games and save the models under this prefix")
     ap.add_argument("--model", help="prefix of the saved models to decode the whole match with")
-    ap.add_argument("--w", type=float, default=0.15, help="scale of the log-probabilities as evidence")
+    ap.add_argument("--w", type=float, default=0.35, help="scale of the log-probabilities as evidence")
     ap.add_argument("--hand-w", type=float, default=1.0, help="scale of the hand-written evidence (0 = classifier only)")
     ap.add_argument("--seeds", type=int, default=3)
-    ap.add_argument("--games", default="metrica_g1,metrica_g2", help="external games to train on (game 3 tags few fouls and hurts)")
+    ap.add_argument("--games", default="skillcorner_*", help="external games to train on: names or prefixes with *")
+    ap.add_argument("--stride", type=int, default=2, help="keep every n-th training frame (neighbours are near-duplicates)")
     ap.add_argument("--margin", type=int, default=25, help="frames around an event-derived transition left out of training")
     ap.add_argument("--gt", help="internal ground truth to report on (validation only)")
     ap.add_argument("--windows", help="comma-separated first-last frames of the validation windows")
@@ -199,7 +201,8 @@ def main(argv=None):
 
     sys.path.insert(0, os.path.join(ROOT, "..", "mtah", "evaluation"))
     import possession_metrics as pm
-    games = [g for g in external_tables(args.external, p) if g[0] in args.games.split(",")]
+    import fnmatch
+    games = [g for g in external_tables(args.external, p) if any(fnmatch.fnmatch(g[0], pat) for pat in args.games.split(","))]
     # 1. are the derived labels consistent with the challenge's convention? score the hand model on them
     for name, fe, _, y in games:
         lab = decode_periods(M.emissions(fe, dict(p, events=[])), fe["periods"], p)
@@ -216,6 +219,8 @@ def main(argv=None):
         ch = np.where(y[1:] != y[:-1])[0] + 1
         for i in ch:
             m[max(0, i - args.margin):i + args.margin] = False
+        if args.stride > 1:
+            m[np.arange(len(m)) % args.stride != 0] = False
         mask[off:off + len(y)] = m
         off += len(y)
     print("training on {} external frames x2 (mirrored)".format(int(mask.sum())), flush=True)
@@ -228,7 +233,7 @@ def main(argv=None):
     # 3. validation on the challenge match: public window and the hand-labelled windows
     proba = np.mean([b.predict(df.values) for b in boosters], axis=0)
     pub = pd.read_csv(os.path.join(ROOT, "..", "mtah", "evaluation", "gt", "BAR-ATH_possession_gt_public.csv"))["label"].values
-    rows = [("hand", hand)] + [("hand + learned x{}".format(w), hand + emissions_from(proba, w)) for w in (0.1, 0.15, 0.2, 0.3)] + [("learned alone x0.5", emissions_from(proba, 0.5))]
+    rows = [("hand", hand)] + [("hand + learned x{}".format(w), hand + emissions_from(proba, w)) for w in (0.25, 0.35, 0.45)] + [("learned alone x0.5", emissions_from(proba, 0.5))]
     gt = pd.read_csv(args.gt)["label"].values if args.gt else None
     windows = [tuple(int(x) for x in w.split("-")) for w in args.windows.split(",")] if args.windows else []
     for name, sc in rows:

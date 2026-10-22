@@ -112,21 +112,32 @@ kick from standstill, so the hold ran for half a minute. Distance-weighted contr
 radius: it only lengthened possessions. Team shape on every frame: it is a slow signal and merged
 possessions, so it is restricted to frames without a ball.
 
-### External training data: Metrica Sports' public sample games
+### External training data
 
-The only data from outside the bundle are Metrica Sports' three public sample games
-(https://github.com/metrica-sports/sample-data: tracking at 25 fps and events, anonymised,
-"please acknowledge the source"). `possession/external.py` turns each game into our feature
-layout and derives a per-frame label from its events: a pass, carry, recovery, shot, set piece
-or ball lost puts the ball with its team; the ball going out, a goal, a foul, a card, an offside
-or the end of a half makes it dead from that event's end; the next set piece (goal kicks are
-tagged as passes) ends the dead ball. These labels train the classifier of §5. Their quality was
-checked by scoring our hand-written model against them: spellF1 0.50 and 0.52 on games 1 and 2,
-the same range as on the challenge match, so they follow the same convention. Game 3's events
-record few fouls (12 against about 40 in the others) and its labels under-count stoppages;
-training on it hurt and it is left out. The sample games' tracking loses the ball on 39% of
-frames, almost exactly the 41% of the challenge match, which is why features learned there
-transfer.
+The classifier of §5 is trained on data from other matches only. Two public sources were
+converted into our feature layout with a per-frame H/A/D label; the submission uses the first.
+
+**SkillCorner open data** (https://github.com/SkillCorner/opendata, MIT, "please credit
+SkillCorner"): broadcast tracking of twenty 2024/25 A-League matches at 10 fps, every player
+present (extrapolated when out of shot), the ball flagged as detected or not, and a per-frame
+possession field naming the team in possession. `possession/skillcorner.py` resamples each
+match to 25 fps by linear interpolation inside each period and takes H or A from the possession
+field; a frame without a possession is D when at least six players are seen in the broadcast
+image (the ball is out of play) and X, not graded, otherwise (a replay or a close-up: about a
+third of the frames). Only a ball flagged as detected counts as seen, which leaves 60% of frames
+with a ball, close to the challenge tracking's 57%. Our hand-written model agrees with these
+labels at spellF1 0.36 and macroF1 0.76 (team right on 82% of alive frames), so they follow the
+same convention; the lower spellF1 than on Metrica comes from the ungraded holes cutting
+possessions short.
+
+**Metrica Sports' sample games** (https://github.com/metrica-sports/sample-data: tracking at
+25 fps and events, anonymised, "please acknowledge the source"): `possession/external.py`
+derives the label from the events (a pass, carry, recovery, shot, set piece or ball lost puts
+the ball with its team; the ball going out, a goal, a foul, a card, an offside or the end of a
+half makes it dead until the next set piece, goal kicks included). The hand-written model agrees
+with those labels at spellF1 0.50 and 0.52 on games 1 and 2, the same range as on the challenge
+match; game 3's events record few fouls and its labels under-count stoppages, so it was left out.
+Trained on games 1 and 2 the classifier was our first submitted version (§5).
 
 ### SoccerTrack v2: tried, no gain
 
@@ -166,13 +177,13 @@ data would be allowed; we did not build one.
 
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror (hand evidence + classifier trained on other matches) | 0.882 | 0.600 | 13 |
+| SyntaxEror (hand evidence + classifier trained on SkillCorner's matches) | 0.865 | 0.648 | 12 |
 | hand evidence only (`python -m possession.model`) | 0.911 | 0.606 | 18 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 238 possessions of mean 15 s and 105 stoppages of mean 27 s,
-with 45% of graded frames dead (hand evidence only: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
+On the full match the file contains 213 possessions of mean 18 s and 99 stoppages of mean 26 s,
+with 41% of graded frames dead (hand evidence only: 206, 99, 41%). Of the 17 true possessions, the two shorter than 1.5 s are absorbed
 by their neighbours; the other 15 are found, and where one falls below the 0.7 IoU bar it is a
 boundary one to three seconds off, not a missing possession.
 
@@ -262,35 +273,38 @@ window; the values set by hand before any labelling score 0.500 / 0.795 and 0.52
 
 A classifier trained on our hand labels of this match lifted held-out spellF1 from 0.546 to
 0.596, and the organisers' clarification ruled it out: a model may not be trained on annotations
-of the provided match. The same recipe trained on Metrica's sample games 1 and 2 (§2) is
-allowed, and is what the submission uses.
+of the provided match. The same recipe trained on other matches (§2) is allowed, and is what the
+submission uses.
 
 `possession/learned.py` fits a gradient-boosted classifier (LightGBM, 300 trees of 15 leaves,
 strong regularisation, three seeds averaged) that gives every frame a probability of H, A and D
 from 90 columns: the tracking features, the hand-written evidence terms, and centred rolling
-means of each over 1, 2, 4 and 10 seconds. Frames within 25 of an event-derived transition are
-left out (event times are coarse), and every game is also fed mirrored (home and away swapped)
-so no team bias can be learned. Its log-probabilities, at weight 0.15, are added to the
-hand-written evidence and decoded by the same Viterbi with the same costs and switch delay.
-Nothing from the challenge match enters training, so every number below is a fair test.
+means of each over 1, 2, 4 and 10 seconds. Frames within 25 of a label transition are left out
+(label times are coarse), every second frame is kept (neighbours are near-duplicates), and every
+match is also fed mirrored (home and away swapped) so no team bias can be learned. Its
+log-probabilities, at weight 0.35, are added to the hand-written evidence and decoded by the
+same Viterbi with the same costs and switch delay. Nothing from the challenge match enters
+training, so every number below is a fair test.
 
 | evidence | public window spellF1 / macroF1 | ten hand-labelled windows, pooled spellF1 (5-95%) / macroF1 |
 |---|---|---|
 | hand-written | 0.606 / 0.911 | 0.546 (0.48-0.62) / 0.805 |
-| hand + classifier x0.15 (submitted) | 0.600 / 0.882 | 0.576 (0.52-0.63) / 0.825 |
-| classifier alone x0.5 | 0.471 / 0.766 | 0.516 (0.45-0.58) / 0.794 |
+| hand + classifier trained on Metrica games 1-2, x0.15 | 0.600 / 0.882 | 0.576 (0.52-0.63) / 0.825 |
+| hand + classifier trained on SkillCorner's 20 matches, x0.35 (submitted) | 0.648 / 0.865 | 0.625 (0.56-0.69) / 0.837 |
+| hand + classifier trained on both, x0.40 | 0.634 / 0.864 | 0.609 (0.55-0.67) / 0.844 |
+| SkillCorner classifier alone, x0.5 | 0.317 / 0.740 | 0.563 (0.47-0.64) / 0.802 |
 
-Six of the ten windows improve, three get worse, one is flat. The gain is about half of what the
-in-match classifier gave, which is the price of the domain shift between matches and of labels
-timed by events rather than by a person. What did not help: adding game 3 (its missing fouls
-teach the wrong dead-ball rate), weights above 0.15, more or deeper trees (600 or 1000 rounds,
-31 or 63 leaves), a faster learning rate, a 10-frame margin instead of 25. The classifier alone
-under-segments the fast public window exactly as the in-match one did; the hand control cue is
-kept for that reason.
+The SkillCorner classifier's gain holds on a plateau of weights from 0.30 to 0.45 (0.608 to
+0.625 pooled) and is the first external source whose gain exceeds the one the in-match
+classifier gave. Eight of the ten windows improve; the one that falls is the window holding the
+penalty, where the broadcast-trained classifier reads the two-minute stoppage as play. Adding
+the Metrica games to the training set buys 0.007 of macroF1 and costs 0.016 of spellF1, the
+ranking metric, so they are left out. The classifier alone under-segments the fast public window
+exactly as the in-match one did; the hand control cue is kept for that reason.
 
 The three trained models are in `models/`, decoding from them is deterministic, and
 `python -m possession.learned --external <folder> --fit models/learned` retrains them from the
-sample games.
+converted matches.
 
 ## 6. Limitations
 
@@ -318,6 +332,7 @@ python make_submission.py           # -> out/SyntaxEror.csv
 Reads the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`, and the
 three classifier files in `models/`. The run is deterministic; a clean clone on an empty data
 folder produces a byte-identical file. `python -m possession.model` writes the hand-evidence-only
-decode. Retraining the classifier needs the Metrica sample games cloned next to the repository
-(`python -m possession.external --data ../metrica-sample-data/data --out ../external-cache`, then
-`python -m possession.learned --external ../external-cache --fit models/learned`).
+decode. Retraining the classifier needs SkillCorner's open data (the twenty `*_tracking_extrapolated.jsonl`
+and `*_match.json` files, one folder per match): `python -m possession.skillcorner --root
+<folder> --out ../external-cache`, then `python -m possession.learned --external
+../external-cache --fit models/learned`.
