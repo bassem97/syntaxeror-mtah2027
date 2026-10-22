@@ -282,7 +282,10 @@ the match, is where that shows: held out, the sum scores 0.384 there against 0.6
 evidence alone, holding each team about six seconds too long at exchanges. Giving the classifier
 only the dead-ball channel keeps that window (0.627) but loses almost all of the pooled gain
 (0.550); the team channel is where the gain is. We go with the pooled estimate over 107
-possessions and say so here. Dropping the long context windows loses the gain, the weight and the
+possessions and say so here. A second classifier on 1-second context only, meant to react
+faster at exchanges, scores 0.369 on that window alone and 0.368 to 0.384 in every blend with
+the first, while lowering the pooled score: the loss there is not a matter of context length.
+Dropping the long context windows loses the gain, the weight and the
 decoder costs sit on a flat plateau (weights 0.35 to 0.5, costs 40 to 50), single seeds score
 within 0.02 of each other, and the labeller's known offset does not matter: shifting the hand
 labels by it before training changes nothing.
