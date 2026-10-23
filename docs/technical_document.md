@@ -139,6 +139,22 @@ with those labels at spellF1 0.50 and 0.52 on games 1 and 2, the same range as o
 match; game 3's events record few fouls and its labels under-count stoppages, so it was left out.
 Trained on games 1 and 2 the classifier was our first submitted version (§5).
 
+**The DFL / Sportec open dataset** (Bassek et al. 2025, CC BY 4.0; `possession/sportec.py`):
+seven Bundesliga matches of optical full-pitch tracking at 25 fps with the provider's own
+per-frame ball status and possession team, the closest tracking to the challenge's of any public
+source. It does not help, and the reason is instructive: the DFL convention marks the ball dead
+on 41 to 52% of frames and changes possession on almost every touch, and our hand-written model
+agrees with it at spellF1 0.25 to 0.31 (macroF1 0.74 to 0.81), against 0.36 with SkillCorner's
+possession field and 0.55 with the organisers' truth. A classifier trained on it alone scores
+0.573 on the ten validation windows, below the Metrica one; added to the SkillCorner matches it
+lowers 0.625 to 0.604. Across the four sources tried, the gain on the challenge match follows the
+agreement of a source's labels with the organisers' convention, not the fidelity of its tracking.
+
+What did not help on the SkillCorner set either: larger classifiers (600 trees of 31 leaves,
+1000 of 63: the public window falls to 0.40-0.51), five seeds instead of three (identical to the
+digit), the Metrica classifier as a second evidence term, and refitting any hand-written weight
+next to the learned evidence (all within noise; less carry or less hand evidence overall lose).
+
 ### SoccerTrack v2: tried, no gain
 
 We also converted six of the ten matches of SoccerTrack v2 (CC BY 4.0, full-pitch player
