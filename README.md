@@ -56,6 +56,7 @@ possession/
   features.py               tracking file -> cached per-frame features (ball, distances, speeds)
   model.py                  evidence terms + Viterbi decoder; all parameters are CLI flags
   learned.py                classifier on top of the evidence terms, trained on other matches
+analysis/fit_oos.py         chooses every parameter value on the external matches (result in fit_oos_result.json)
   skillcorner.py            SkillCorner's open data -> features and labels for that training
   external.py               Metrica's public sample games -> the same, the first source we tried
   pff.py, sportec.py, soccertrack.py   three more sources converted the same way, tried and not used
@@ -63,7 +64,7 @@ models/                     the three trained classifiers the submission decodes
   touches.py                ball touches from velocity changes, attributed to the nearest team
   smart_tagging.py          Smart Tagging XML reader (vendored from the organisers' repo, MIT)
   games.py                  match constants and asset paths (vendored, MIT; one path edit)
-labeling/                   hand-labelling kit for the internal validation set (see its README)
+labeling/                   hand-labelling kit; its labels are not used anywhere (organisers' ruling, technical document §5)
 analysis/
   counts.py                 full-match possession / stoppage counts of a submission
   diag.py                   per-segment view of a submission against the public ground truth

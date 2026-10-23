@@ -142,6 +142,17 @@ def train_mask(gt, windows, margin=10):
     return mask
 
 
+def train_mask_external(y, margin=25, stride=2):
+    """Graded frames of an external game, minus a margin around every label transition (event
+    times are coarse) and thinned to every stride-th frame (neighbours are near-duplicates)."""
+    m = y >= 0
+    for i in np.where(y[1:] != y[:-1])[0] + 1:
+        m[max(0, i - margin):i + margin] = False
+    if stride > 1:
+        m[np.arange(len(m)) % stride != 0] = False
+    return m
+
+
 def decode_periods(score, periods, p):
     """Decode a match given as (period, first_frame, last_frame) rows, 1-based frames."""
     labels = np.full(len(score), "X", dtype="<U1")
@@ -215,17 +226,7 @@ def main(argv=None):
     # 2. train on all external games
     X = pd.concat([t for _, _, t, _ in games], ignore_index=True)
     Y = np.concatenate([y for _, _, _, y in games])
-    mask = np.zeros(len(Y), bool)
-    off = 0
-    for _, _, t, y in games:
-        m = y >= 0
-        ch = np.where(y[1:] != y[:-1])[0] + 1
-        for i in ch:
-            m[max(0, i - args.margin):i + args.margin] = False
-        if args.stride > 1:
-            m[np.arange(len(m)) % args.stride != 0] = False
-        mask[off:off + len(y)] = m
-        off += len(y)
+    mask = np.concatenate([train_mask_external(y, args.margin, args.stride) for _, _, _, y in games])
     print("training on {} external frames x2 (mirrored)".format(int(mask.sum())), flush=True)
     boosters = [train(X, Y, mask, seed=k) for k in range(args.seeds)]
     if args.fit:
