@@ -147,8 +147,26 @@ on 41 to 52% of frames and changes possession on almost every touch, and our han
 agrees with it at spellF1 0.25 to 0.31 (macroF1 0.74 to 0.81), against 0.36 with SkillCorner's
 possession field and 0.55 with the organisers' truth. A classifier trained on it alone scores
 0.573 on the ten validation windows, below the Metrica one; added to the SkillCorner matches it
-lowers 0.625 to 0.604. Across the four sources tried, the gain on the challenge match follows the
-agreement of a source's labels with the organisers' convention, not the fidelity of its tracking.
+lowers 0.625 to 0.604.
+
+**PFF FC's 2022 World Cup data** (free on request from PFF FC's blog; `possession/pff.py`): broadcast
+tracking of all 64 matches at 29.97 fps with every on-the-ball event and its team written into
+the frames, the largest set and the one whose labels agree best with our model (hand-written
+model against its labels: spellF1 0.56 and macroF1 0.85 on average over the matches, 0.41 to
+0.70). The ball-out event PFF writes at every whistle makes the dead spans come out as in the
+organisers' convention. It still does not help, for a reason of its own: PFF has no ball while
+play is stopped (seen on 1% of dead frames, against 29% in our labelled windows), so a classifier
+learns "ball seen = alive" and calls the challenge's stoppages play (dead recall 0.55 on the
+public window against 0.72 for the SkillCorner one). Drawing the ball on dead frames along the
+line from where it went out to where play restarts, blanked to the challenge's rate, repairs the
+visibility statistics but not the score: alone 0.562 to 0.566 on the windows, with the
+SkillCorner matches 0.563 to 0.564 (public 0.61 to 0.62), with only twelve of its matches added
+0.556 to 0.577 (public 0.62 to 0.63). Its broadcast is cut away from the pitch far more often than SkillCorner's and its
+estimated positions during those cuts, kept or not, leave the classifier worse at the challenge's
+stoppages. Across the five sources tried, the gain on the challenge match is not predicted by the
+fidelity of a source's tracking, nor fully by the agreement of its labels with the organisers'
+convention; the one that transfers is the one whose ball and camera behave most like the
+challenge's during stoppages.
 
 What did not help on the SkillCorner set either: larger classifiers (600 trees of 31 leaves,
 1000 of 63: the public window falls to 0.40-0.51), five seeds instead of three (identical to the
@@ -309,6 +327,8 @@ training, so every number below is a fair test.
 | hand + classifier trained on SkillCorner's 20 matches, x0.35 (submitted) | 0.648 / 0.865 | 0.625 (0.56-0.69) / 0.837 |
 | hand + classifier trained on both, x0.40 | 0.634 / 0.864 | 0.609 (0.55-0.67) / 0.844 |
 | SkillCorner classifier alone, x0.5 | 0.317 / 0.740 | 0.563 (0.47-0.64) / 0.802 |
+| hand + classifier trained on PFF's 64 matches, x0.25 | 0.621 / 0.847 | 0.566 (0.51-0.62) / 0.828 |
+| hand + classifier trained on SkillCorner + PFF, x0.25 | 0.621 / 0.864 | 0.564 (0.50-0.63) / 0.820 |
 
 The SkillCorner classifier's gain holds on a plateau of weights from 0.30 to 0.45 (0.608 to
 0.625 pooled) and is the first external source whose gain exceeds the one the in-match

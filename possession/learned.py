@@ -153,12 +153,16 @@ def decode_periods(score, periods, p):
     return M.delay_switches(labels, int(p["switch_delay"]))
 
 
-def external_tables(folder, p):
-    """[(name, features dict, table, label codes)] for every external game in the folder."""
+def external_tables(folder, p, patterns=("*",)):
+    """[(name, features dict, table, label codes)] for every external game in the folder whose
+    name matches one of the patterns."""
+    import fnmatch
     import glob
     q = dict(p, events=[])
     out = []
     for path in sorted(glob.glob(os.path.join(folder, "*.npz"))):
+        if not any(fnmatch.fnmatch(os.path.basename(path)[:-4], pat) for pat in patterns):
+            continue
         f = dict(np.load(path))
         lab = f.pop("label")
         out.append((os.path.basename(path)[:-4], f, frame_table(f, q), np.array([LAB.get(l, -1) for l in lab])))
@@ -201,8 +205,7 @@ def main(argv=None):
 
     sys.path.insert(0, os.path.join(ROOT, "..", "mtah", "evaluation"))
     import possession_metrics as pm
-    import fnmatch
-    games = [g for g in external_tables(args.external, p) if any(fnmatch.fnmatch(g[0], pat) for pat in args.games.split(","))]
+    games = external_tables(args.external, p, args.games.split(","))
     # 1. are the derived labels consistent with the challenge's convention? score the hand model on them
     for name, fe, _, y in games:
         lab = decode_periods(M.emissions(fe, dict(p, events=[])), fe["periods"], p)
