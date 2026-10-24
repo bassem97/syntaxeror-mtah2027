@@ -143,9 +143,10 @@
   if (served) {
     // Served by labeling/serve.py: everything loads by URL, nothing to pick, marks save to disk.
     document.querySelector('header').querySelectorAll('label').forEach(l => l.hidden = true);
-    v.src = '/video.mp4';
     status.textContent = 'loading references…';
-    fetch('/config.json').then(r => r.ok ? r.json() : null).then(c => { if (c) applyConfig(c); }).catch(() => null).then(() => Promise.all([['public GT', '/ref/public.csv'], ['SyntaxEror', '/ref/model.csv']].map(([name, url]) =>
+    // the config (which match, which saved position to restore) must be known before the video
+    // loads, or the position of the other match is restored on this one
+    fetch('/config.json').then(r => r.ok ? r.json() : null).then(c => { if (c) applyConfig(c); }).catch(() => null).then(() => { v.src = '/video.mp4'; }).then(() => Promise.all([['public GT', '/ref/public.csv'], ['SyntaxEror', '/ref/model.csv']].map(([name, url]) =>
       fetch(url).then(r => r.ok ? r.text().then(t => parseRef(name, t)) : null).catch(() => null)))
       .then(() => fetch(marksUrl()).then(r => r.ok ? r.text() : '').then(t => { if (t) { marks = new Map(); parseMarks(t); normalize(); } }))
       .then(() => { status.textContent = `ready: ${refs.length} reference track(s), ${marks.size} marks for window ${windowEl.value}`; render(); }));
