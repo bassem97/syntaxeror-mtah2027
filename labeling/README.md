@@ -1,10 +1,13 @@
-# Internal validation labels
+# Hand labels
 
-The public ground truth is 5 minutes and 17 possessions, which cannot tell two versions of the
-model apart. We label 15 more minutes ourselves, touch-level like the organisers' corrected
-tracking, and use them only to validate (the rules allow hand labels for training and validation;
-the submitted labels still come out of the algorithm). The labels stay in `labeling/data/`, which
-is not committed.
+**Ruling (organisers, 23 Oct 2026): hand labels of the challenge match may not be used for any
+purpose, not training, not validation, not choosing parameter values.** The windows of the
+challenge match below were labelled before that answer; their marks stay in `labeling/data/`
+(not committed) and are not used anywhere. What the organisers allow is to annotate *another*
+match, choose the values on it, apply them unchanged, and share the video and annotations. That
+is the section "Another match" at the end; the kit, keys and convention are the same.
+
+## The challenge match (labelled before the ruling; not used)
 
 ## Windows
 
@@ -114,3 +117,43 @@ python ../mtah/evaluation/run_evaluation.py --gt labeling/data/gt_internal.csv -
 
 Two labellers on the same window is the cheapest quality check: convert both and score one as a
 "submission" against the other.
+
+## Another match: SoccerTrack v2, match 117093
+
+A university match from SoccerTrack v2 (CC BY 4.0, Hugging Face `atomscott/SoccerTrack-v2`),
+full-pitch panoramic video of both halves, chosen because the labels we make on it follow the
+organisers' convention and the organisers allow choosing parameter values on a match annotated
+elsewhere. `analysis/prepare_match.py` builds one 25 fps proxy of both halves back to back
+(first half frames 0 to 67624, second half 67625 to 138099), converts the positions to the same
+frame layout and writes the model's own decode as the reference track under the timeline.
+
+```bash
+python labeling/serve.py --port 8766 --video ../external/soccertrack/117093_proxy.mp4 --marks st117093 --n 138100 --home Left --away Right --window 1250-8749 --model-ref out/soccertrack_117093_model.csv
+```
+
+`Q` is **Left**, the team defending the left goal at the first-half kick-off, and `L` is
+**Right**, the other team. The teams swap ends at half-time: keep the keys with the teams, not
+with the sides. Marks save to `labeling/data/marks_st117093.csv`, separate from the challenge
+match's file.
+
+| window | frames | where in the match |
+|---|---|---|
+| S1 | 1250–8749 | first half, minute 1 |
+| S2 | 18750–26249 | first half, minute 12 |
+| S3 | 36250–43749 | first half, minute 24 |
+| S4 | 53750–61249 | first half, minute 36 |
+| S5 | 68875–76374 | second half, minute 1 |
+| S6 | 86375–93874 | second half, minute 12 |
+| S7 | 103875–111374 | second half, minute 24 |
+| S8 | 121375–128874 | second half, minute 36 |
+
+Every window starts with a mark (set the state at its first frame before anything else). The
+convention is the one above, word for word. From marks to a file the fit reads:
+
+```bash
+python labeling/marks_to_gt.py labeling/data/marks_st117093.csv --n-frames 138100 --window 1250-8749 --window 18750-26249 --window 36250-43749 --window 53750-61249 --window 68875-76374 --window 86375-93874 --window 103875-111374 --window 121375-128874 -o labeling/soccertrack_117093_labels.csv
+```
+
+That file is committed (it is the annotation the organisers asked us to share) and
+`analysis/fit_oos.py --games soccertrack_117093 --labels labeling/soccertrack_117093_labels.csv`
+chooses the parameter values on it.

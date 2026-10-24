@@ -40,13 +40,23 @@ GRID = {
 }
 
 
-def oos_probabilities(games, proba_dir):
-    """Out-of-sample probabilities per game, computed once and cached as .npy."""
+def oos_probabilities(games, proba_dir, models=None):
+    """Out-of-sample probabilities per game, computed once and cached as .npy. With no
+    SkillCorner game in the list the committed models (trained on all of SkillCorner) are
+    out of sample for every other source and are used as they are."""
     missing = [g for g in games if not os.path.exists(os.path.join(proba_dir, g[0] + ".npy"))]
     if not missing:
         return
     sc = [g for g in games if g[0].startswith("skillcorner")]
     rest = [g for g in games if not g[0].startswith("skillcorner")]
+    if not sc:
+        import glob
+        import lightgbm as lgb
+        boosters = [lgb.Booster(model_str=open(m, newline="").read().replace("\r\n", "\n")) for m in sorted(glob.glob(models + "_*.txt"))]
+        os.makedirs(proba_dir, exist_ok=True)
+        for name, _, t, _ in missing:
+            np.save(os.path.join(proba_dir, name + ".npy"), np.mean([b.predict(t.values) for b in boosters], axis=0))
+        return
     folds = [sc[: len(sc) // 2], sc[len(sc) // 2:]]
     out = {}
     for k, train_games in enumerate(folds):
@@ -68,15 +78,23 @@ def main():
     ap.add_argument("--proba", required=True, help="folder for the out-of-sample probabilities")
     ap.add_argument("--games", default="skillcorner_*,metrica_g1,metrica_g2")
     ap.add_argument("--passes", type=int, default=2)
+    ap.add_argument("--models", default=os.path.join(ROOT, "models", "learned"), help="committed classifier prefix, used when no SkillCorner game is fitted on")
+    ap.add_argument("--tag", default="", help="suffix of the result file")
+    ap.add_argument("--labels", help="frame,label CSV of our own annotation of the (single) fitted match, replacing its event-derived label")
     args = ap.parse_args()
     import possession_metrics as pm
     base = {a.dest: a.default for a in M.argparser()._actions if a.dest != "help"}
     base["events"] = []
     games = L.external_tables(args.external, base, args.games.split(","))
-    oos_probabilities(games, args.proba)
+    oos_probabilities(games, args.proba, args.models)
     data = []
     for name, f, _, y in games:
         lab = np.where(y >= 0, np.array(list("HAD"))[np.maximum(y, 0)], "X")
+        if args.labels:
+            assert len(games) == 1, "--labels is for one annotated match"
+            lab = pd.read_csv(args.labels)["label"].values.astype("<U1")
+            assert len(lab) == len(y), "annotation has {} frames, features {}".format(len(lab), len(y))
+            print("hand labels: {} graded frames ({:.1f} min)".format(int((lab != "X").sum()), (lab != "X").sum() / 25 / 60), flush=True)
         data.append((name, f, lab, np.load(os.path.join(args.proba, name + ".npy"))))
     del games
     cache = {}
@@ -109,7 +127,7 @@ def main():
                 cur[k], (best, per) = v_best, trial[v_best]
             print("pass {} {}: {} -> {} {:.3f} {}".format(n, k, {v: round(t[0], 3) for v, t in trial.items()}, cur[k], best, per), flush=True)
         history.append(dict(cur, score=best))
-    out = os.path.join(HERE, "fit_oos_result.json")
+    out = os.path.join(HERE, "fit_oos_result{}.json".format(args.tag))
     json.dump({"start": START, "grid": GRID, "best": cur, "score": best, "per_source": per, "history": history}, open(out, "w"), indent=1)
     print("best", cur, "mean spellF1 {:.3f}".format(best), "wrote", out)
 

@@ -56,8 +56,8 @@ def expand(marks, window):
     return labels
 
 
-def build(mark_paths, windows, public=None):
-    gt = np.full(N_FRAMES, "X", dtype="<U1")
+def build(mark_paths, windows, public=None, n_frames=N_FRAMES):
+    gt = np.full(n_frames, "X", dtype="<U1")
     if public:
         with open(public, newline="") as fh:
             for row in list(csv.reader(fh))[1:]:
@@ -115,8 +115,9 @@ if __name__ == "__main__":
     ap.add_argument("--window", action="append", required=True, help="first-last frame, repeatable")
     ap.add_argument("--public", help="public ground truth CSV to merge in")
     ap.add_argument("-o", "--out", required=True)
+    ap.add_argument("--n-frames", type=int, default=N_FRAMES, help="length of the output (another match's frame count)")
     args = ap.parse_args()
     windows = [tuple(int(x) for x in w.split("-")) for w in args.window]
-    gt = build(args.marks, windows, args.public)
+    gt = build(args.marks, windows, args.public, args.n_frames)
     write(gt, args.out)
     print("wrote", args.out, "->", summary(gt))

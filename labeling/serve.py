@@ -2,12 +2,14 @@
 
     python labeling/serve.py                 # then open http://localhost:8765
     python labeling/serve.py --video path    # a different video file (e.g. the 540p proxy)
+    python labeling/serve.py --video other.mp4 --marks st117093 --n 135000 --home Left --away Right                              --model-ref out/soccertrack_117093_model.csv     # another match
 
 Routes:
   /                      the labelling page
   /video.mp4             the tactical video, with HTTP range support so seeking works
   /ref/public.csv        the public ground truth (from ../mtah, if present)
-  /ref/model.csv         out/SyntaxEror.csv, if present
+  /ref/model.csv         out/SyntaxEror.csv (or --model-ref), if present
+  /config.json           frame count, team names and marks file name for the page
   /marks/<window>.csv    GET resumes, PUT saves -> labeling/data/marks_<window>.csv
 
 Everything stays on this machine. Standard library only.
@@ -30,6 +32,7 @@ REFS = {
     "model.csv": os.path.join(ROOT, "out", "SyntaxEror.csv"),
 }
 VIDEO = None
+CONFIG = {"n": 199319, "home": "Barça", "away": "Athletic", "marks": "all", "window": "11185-18684"}
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -42,6 +45,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_file(PAGE, "text/html; charset=utf-8")
         if self.path == "/video.mp4":
             return self.send_file(VIDEO, "video/mp4")
+        if self.path == "/config.json":
+            import json
+            body = json.dumps(CONFIG).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path.startswith("/ref/"):
             name = self.path[5:]
             if name in REFS and os.path.isfile(REFS[name]):
@@ -137,7 +150,18 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--video", help="video file to serve (default: the tactical video from the data dir)")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--marks", default="all", help="marks file name: labeling/data/marks_<name>.csv")
+    ap.add_argument("--n", type=int, default=CONFIG["n"], help="frame count of the video")
+    ap.add_argument("--home", default=CONFIG["home"], help="name shown for H")
+    ap.add_argument("--away", default=CONFIG["away"], help="name shown for A")
+    ap.add_argument("--window", default=CONFIG["window"], help="default window field")
+    ap.add_argument("--model-ref", help="CSV (frame,label) shown as the model's reference track")
     args = ap.parse_args()
+    CONFIG.update(n=args.n, home=args.home, away=args.away, marks=args.marks, window=args.window)
+    if args.marks != "all":                 # another match: the challenge match's tracks mean nothing here
+        REFS.clear()
+    if args.model_ref:
+        REFS["model.csv"] = args.model_ref
     VIDEO = args.video or asset_paths()["video"]
     # Prefer the seek-friendly proxy when it sits next to the original (same frame numbers):
     #   ffmpeg -i BAR-ATH_tactical.mp4 -vf scale=960:-2 -r 25 -vsync cfr -c:v libx264 -preset veryfast

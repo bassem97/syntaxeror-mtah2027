@@ -200,7 +200,9 @@ def rebuild_ball(tracks, events, n):
     return ball
 
 
-def convert_match(root, match, out, stats_path, keep_json=False):
+def convert_match(root, match, out, stats_path, keep_json=False, half_frames=None):
+    """half_frames: frame count of each half's video, when the features must line up with it
+    (frames beyond the annotations are padded as X, surplus annotation frames dropped)."""
     bas = json.load(open(os.path.join(root, "bas", match, "{}_12_class_events.json".format(match)), encoding="utf-8"))
     halves = []
     home_ids = None
@@ -236,6 +238,13 @@ def convert_match(root, match, out, stats_path, keep_json=False):
         ball = rebuild_ball(tracks, events, n)
         keys = "rebuilt from tracks"
         ball = degrade_ball(ball, stats_path, seed=int(match) + h)
+        if half_frames is not None:
+            nv = int(half_frames[h - 1])
+            players, ball, lab = players[:nv], ball[:nv], lab[:nv]
+            if nv > len(lab):
+                players = np.concatenate([players, np.full((nv - len(players), players.shape[1], 3), np.nan)])
+                ball = np.concatenate([ball, np.full((nv - len(ball), ball.shape[1]), np.nan)])
+                lab = np.concatenate([lab, np.full(nv - len(lab), "X", dtype=lab.dtype)])
         halves.append((players, is_home, ball, lab))
         if not keep_json and os.path.exists(gpath):
             os.remove(gpath)

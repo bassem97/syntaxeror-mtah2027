@@ -84,7 +84,8 @@
 </main>
 <script>
 (() => {
-  const FPS = 25, N = 199319;
+  const FPS = 25; let N = 199319;
+  let CFG = { n: N, home: 'Barça', away: 'Athletic', marks: 'all', window: '11185-18684' };
   const v = document.getElementById('v');
   const frameEl = document.getElementById('frame'), clockEl = document.getElementById('clock');
   const status = document.getElementById('status');
@@ -94,13 +95,13 @@
   let marks = new Map();           // frame -> label (start of a state)
   let refs = [];                   // [{name, labels: Uint8Array of charcodes}]
   let frame = 0, rate = 1;
-  const KEY = 'possession-marks';
+  let KEY = 'possession-marks';
 
   const served = location.protocol.startsWith('http');
   const windowEl = document.getElementById('window');
   // one file for everything you mark, whatever the window field says; the converter picks
   // windows out of it. (Per-window files went out of sync with the field after reloads.)
-  function marksUrl() { return '/marks/all.csv'; }
+  function marksUrl() { return `/marks/${CFG.marks}.csv`; }
   function marksCsv() { return ['frame,label', ...sortedMarks().map(k => `${k},${marks.get(k)}`)].join('\n') + '\n'; }
   let saveTimer = null;
   function save() {
@@ -108,8 +109,21 @@
     if (!served) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => fetch(marksUrl(), { method: 'PUT', body: marksCsv() })
-      .then(r => { status.textContent = r.ok ? `saved ${sortedMarks().length} marks to labeling/data/marks_all.csv` : 'save failed'; })
+      .then(r => { status.textContent = r.ok ? `saved ${sortedMarks().length} marks to labeling/data/marks_${CFG.marks}.csv` : 'save failed'; })
       .catch(() => { status.textContent = 'save failed: is serve.py running?'; }), 300);
+  }
+  // Another match (serve.py --marks/--n/--home/--away): its own marks file and names, and its own
+  // browser-side keys so nothing mixes with the challenge match's marks.
+  function applyConfig(c) {
+    CFG = Object.assign(CFG, c); N = CFG.n;
+    if (CFG.marks !== 'all') { KEY = `possession-marks:${CFG.marks}`; POS_KEY = `${POS_KEY}:${CFG.marks}`; }
+    document.querySelector('[data-mark="H"]').textContent = `Q · ${CFG.home} (H)`;
+    document.querySelector('[data-mark="A"]').textContent = `L · ${CFG.away} (A)`;
+    document.getElementById('goto').max = N - 1;
+    if (!localStorage.getItem(POS_KEY)) windowEl.value = CFG.window;
+    document.querySelectorAll('.help kbd').forEach(k => { if (k.nextSibling && k.nextSibling.nodeType === 3) {
+      if (k.textContent === 'Q') k.nextSibling.textContent = ` ${CFG.home} · `;
+      if (k.textContent === 'L') k.nextSibling.textContent = ` ${CFG.away} · `; } });
   }
   function load() { try { const s = localStorage.getItem(KEY); if (s) marks = new Map(JSON.parse(s)); } catch (e) {} }
   function parseMarks(text) {
@@ -131,10 +145,10 @@
     document.querySelector('header').querySelectorAll('label').forEach(l => l.hidden = true);
     v.src = '/video.mp4';
     status.textContent = 'loading references…';
-    Promise.all([['public GT', '/ref/public.csv'], ['SyntaxEror', '/ref/model.csv']].map(([name, url]) =>
+    fetch('/config.json').then(r => r.ok ? r.json() : null).then(c => { if (c) applyConfig(c); }).catch(() => null).then(() => Promise.all([['public GT', '/ref/public.csv'], ['SyntaxEror', '/ref/model.csv']].map(([name, url]) =>
       fetch(url).then(r => r.ok ? r.text().then(t => parseRef(name, t)) : null).catch(() => null)))
       .then(() => fetch(marksUrl()).then(r => r.ok ? r.text() : '').then(t => { if (t) { marks = new Map(); parseMarks(t); normalize(); } }))
-      .then(() => { status.textContent = `ready: ${refs.length} reference track(s), ${marks.size} marks for window ${windowEl.value}`; render(); });
+      .then(() => { status.textContent = `ready: ${refs.length} reference track(s), ${marks.size} marks for window ${windowEl.value}`; render(); }));
   } else {
     load();
   }
@@ -158,7 +172,7 @@
   // cheap parts update (counter + timeline, at most ~10 times a second); the marks list is
   // rebuilt only when marks change or playback stops, so keys stay responsive.
   let lastDraw = 0, lastPosSave = 0;
-  const POS_KEY = 'possession-position';
+  let POS_KEY = 'possession-position';
   function rememberPosition() {
     const now = performance.now();
     if (now - lastPosSave < 1000) return;
