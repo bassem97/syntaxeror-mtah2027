@@ -138,7 +138,8 @@ the ball with its team; the ball going out, a goal, a foul, a card, an offside o
 half makes it dead until the next set piece, goal kicks included). The hand-written model agrees
 with those labels at spellF1 0.50 and 0.52 on games 1 and 2, the same range as on the challenge
 match; game 3's events record few fouls and its labels under-count stoppages, so it was left out.
-Trained on games 1 and 2 the classifier was our first submitted version (§5).
+Trained on games 1 and 2 the classifier was our first submitted version; the submission now
+trains on them next to SkillCorner's matches (§5).
 
 **The DFL / Sportec open dataset** (Bassek et al. 2025, CC BY 4.0; `possession/sportec.py`):
 seven Bundesliga matches of optical full-pitch tracking at 25 fps with the provider's own
@@ -213,12 +214,12 @@ data would be allowed; we did not build one.
 
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror (hand evidence + classifier trained on SkillCorner's matches) | 0.860 | 0.553 | 17 |
+| SyntaxEror (hand evidence + classifier trained on SkillCorner's and Metrica's matches) | 0.852 | 0.553 | 17 |
 | hand evidence only (`python -m possession.model`) | 0.883 | 0.522 | 19 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 278 possessions of mean 13 s and 116 stoppages of mean 24 s,
+On the full match the file contains 277 possessions of mean 13 s and 116 stoppages of mean 24 s,
 with 43% of graded frames dead (hand evidence only: 310, 117, 43%). This table is a check, not an
 input: no value was chosen or kept because of it. Earlier versions scored higher here (0.648 with
 values chosen against our own labels of the match, 0.582 with the nine decoder values chosen on
@@ -319,20 +320,27 @@ training or the choice of the weight.
 | evidence | public window spellF1 / macroF1 | external matches, out of sample, mean spellF1 |
 |---|---|---|
 | hand-written | 0.522 / 0.883 | 0.509 |
-| hand + classifier trained on SkillCorner's 20 matches, x0.35 (submitted) | 0.553 / 0.860 | 0.527 |
+| hand + classifier trained on SkillCorner's 20 matches, x0.35 | 0.553 / 0.860 | 0.522 to 0.527 |
+| hand + classifier trained on SkillCorner's 20 + Metrica's 2 matches, x0.35 (submitted) | 0.553 / 0.852 | 0.529 |
 
-On the external matches the gain holds for weights 0.25 to 0.45 (0.522 to 0.527). Before the
-rulings of §5 the same classifier, and the alternatives of §2 (Metrica, PFF, Sportec, SoccerTrack,
-and combinations), were ranked against our own labels of the match and the public window; those
-rankings are not used and not reported. SkillCorner's matches are the training set for reasons
-that need neither: the largest public set with a ball flagged as detected, and the only source
-whose classifier, scored out of sample on matches it never saw (its own folds and the Metrica
-games), lifts the hand-written decode, 0.509 to 0.527. The hand control cue is kept because
-without it the classifier under-segments on those same external matches.
+On the external matches the classifier's gain holds for weights 0.25 to 0.45. Before the rulings
+of §5 the same classifier, and the alternatives of §2 (Metrica, PFF, Sportec, SoccerTrack, and
+combinations), were ranked against our own labels of the match and the public window; those
+rankings are not used and not reported. The training set was settled on external evidence alone
+(`analysis/fit_features.py`, `analysis/fit_features_result.json`): SkillCorner's matches because
+they are the largest public set with a ball flagged as detected and the only source whose
+classifier, scored out of sample on matches it never saw, lifts the hand-written decode (0.509
+to 0.522 to 0.527, the spread being retraining noise); Metrica's two games next to them because,
+with each Metrica game scored by the fold that trained on the other, the mean goes from 0.522 to
+0.529 and the gain lands on the provider whose tracking the challenge uses, SkillCorner's own
+score unchanged. The same experiment rejected standardising every feature per match before the
+classifier (0.493 alone, 0.530 with Metrica: nothing beyond the Metrica effect). The hand
+control cue is kept because without it the classifier under-segments on those same external
+matches.
 
 The three trained models are in `models/`, decoding from them is deterministic, and
 `python -m possession.learned --external <folder> --fit models/learned` retrains them from the
-converted matches.
+converted matches (SkillCorner's and Metrica's, its default `--games`).
 
 ## 6. Limitations
 
@@ -365,7 +373,8 @@ three classifier files in `models/`. The run is deterministic; a clean clone on 
 folder produces a byte-identical file. `python -m possession.model` writes the hand-evidence-only
 decode, `python analysis/fit_oos.py --external <folder> --proba <folder> --round 1|2` repeats the
 choice of the parameter values on the converted external matches and `python
-analysis/fit_capacity.py --external <folder>` the choice of the classifier's size. Retraining the classifier needs SkillCorner's open data (the twenty `*_tracking_extrapolated.jsonl`
+analysis/fit_capacity.py --external <folder>` the choice of the classifier's size, `python
+analysis/fit_features.py --external <folder>` the choice of its training set. Retraining the classifier needs SkillCorner's open data (the twenty `*_tracking_extrapolated.jsonl`
 and `*_match.json` files, one folder per match): `python -m possession.skillcorner --root
 <folder> --out ../external-cache`, then `python -m possession.learned --external
 ../external-cache --fit models/learned`.

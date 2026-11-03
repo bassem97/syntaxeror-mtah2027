@@ -1,0 +1,22 @@
+{
+ "raw": {
+  "metrica": 0.605,
+  "skillcorner": 0.439,
+  "mean": 0.522
+ },
+ "raw+metrica": {
+  "metrica": 0.62,
+  "skillcorner": 0.438,
+  "mean": 0.529
+ },
+ "zscore": {
+  "metrica": 0.55,
+  "skillcorner": 0.436,
+  "mean": 0.493
+ },
+ "zscore+metrica": {
+  "metrica": 0.627,
+  "skillcorner": 0.434,
+  "mean": 0.53
+ }
+}

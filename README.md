@@ -5,7 +5,7 @@ initial challenge: one possession label (`H` / `A` / `D` / `X`) for every frame 
 video of FC Barcelona vs Athletic Club, produced from the automatic tracking and the Smart Tagging.
 
 The method is a per-frame evidence model, hand-written terms plus a small classifier trained
-on SkillCorner's open tracking data (twenty other matches), decoded with a 3-state Viterbi, so
+on SkillCorner's open tracking data and Metrica's sample games (22 other matches), decoded with a 3-state Viterbi, so
 possessions come out as whole segments rather than as a majority vote over frames. It is described in
 [docs/technical_document.md](docs/technical_document.md).
 
@@ -80,7 +80,7 @@ Every model parameter is a flag on `python -m possession.model --help` (hand evi
 Our code is MIT. `possession/games.py` and `possession/smart_tagging.py` are adapted from
 [metrica-sports/more-than-a-hack-2027](https://github.com/metrica-sports/more-than-a-hack-2027),
 MIT, see `LICENSE-metrica-sports.txt`. The classifier was trained on
-[SkillCorner's open data](https://github.com/SkillCorner/opendata) (MIT), which we credit with thanks;
-[Metrica Sports' sample data](https://github.com/metrica-sports/sample-data) served as the first
-source we tried. Neither dataset is redistributed here. The match data is not covered by any licence here and is not
+[SkillCorner's open data](https://github.com/SkillCorner/opendata) (MIT), which we credit with thanks,
+and on [Metrica Sports' sample data](https://github.com/metrica-sports/sample-data), which we
+acknowledge with thanks. Neither dataset is redistributed here. The match data is not covered by any licence here and is not
 redistributed.

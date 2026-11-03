@@ -96,6 +96,31 @@ def mirror(df):
     return m
 
 
+def standardise(df, eps=1e-6):
+    """Per-match standardisation of the feature table, label-free, mirror-safe: a home/away
+    pair shares one mean and spread, signed team evidence is scaled without shifting, and the
+    bounded columns (ball x, visibility, time since seen) are left alone."""
+    out = df.copy()
+    done = set()
+    for c in df.columns:
+        if c in done or c.startswith(("ball_x", "vis", "since_vis")):
+            continue
+        if c.startswith("ev_team"):
+            out[c] = df[c] / (df[c].std() + eps)
+        elif "_h" in c and c.replace("_h", "_a", 1) in df.columns:
+            ca = c.replace("_h", "_a", 1)
+            both = pd.concat([df[c], df[ca]])
+            m, sd = both.mean(), both.std() + eps
+            out[c], out[ca] = (df[c] - m) / sd, (df[ca] - m) / sd
+            done.add(ca)
+        elif "_a" in c and c.replace("_a", "_h", 1) in df.columns:
+            continue
+        else:
+            out[c] = (df[c] - df[c].mean()) / (df[c].std() + eps)
+        done.add(c)
+    return out
+
+
 def train(df, y, mask, seed=0, rounds=300, leaves=15):
     X = pd.concat([df[mask], mirror(df[mask])], ignore_index=True)
     ym = y[mask].copy()
@@ -188,7 +213,7 @@ def main(argv=None):
     ap.add_argument("--w", type=float, default=0.35, help="scale of the log-probabilities as evidence")
     ap.add_argument("--hand-w", type=float, default=1.0, help="scale of the hand-written evidence (0 = classifier only)")
     ap.add_argument("--seeds", type=int, default=3)
-    ap.add_argument("--games", default="skillcorner_*", help="external games to train on: names or prefixes with *")
+    ap.add_argument("--games", default="skillcorner_*,metrica_g1,metrica_g2", help="external games to train on: names or prefixes with *")
     ap.add_argument("--stride", type=int, default=2, help="keep every n-th training frame (neighbours are near-duplicates)")
     ap.add_argument("--margin", type=int, default=25, help="frames around an event-derived transition left out of training")
     ap.add_argument("--gt", help="internal ground truth to report on (validation only)")
