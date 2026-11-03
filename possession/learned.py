@@ -96,17 +96,17 @@ def mirror(df):
     return m
 
 
-def train(df, y, mask, seed=0):
+def train(df, y, mask, seed=0, rounds=300, leaves=15):
     X = pd.concat([df[mask], mirror(df[mask])], ignore_index=True)
     ym = y[mask].copy()
     ym_m = ym.copy()
     ym_m[ym == 0] = 1
     ym_m[ym == 1] = 0
     Y = np.concatenate([ym, ym_m])
-    params = dict(objective="multiclass", num_class=3, learning_rate=0.05, num_leaves=15, min_data_in_leaf=200,
+    params = dict(objective="multiclass", num_class=3, learning_rate=0.05, num_leaves=leaves, min_data_in_leaf=200,
                   bagging_fraction=0.8, bagging_freq=1, feature_fraction=0.7, lambda_l2=5.0, seed=seed,
                   num_threads=8, verbose=-1)
-    return lgb.train(params, lgb.Dataset(X.values, Y), num_boost_round=300)
+    return lgb.train(params, lgb.Dataset(X.values, Y), num_boost_round=rounds)
 
 
 def emissions_from(proba, w):

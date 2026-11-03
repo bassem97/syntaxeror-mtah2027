@@ -1,0 +1,17 @@
+{
+ "300x15": {
+  "metrica": 0.59,
+  "skillcorner": 0.436,
+  "mean": 0.513
+ },
+ "600x31": {
+  "metrica": 0.583,
+  "skillcorner": 0.443,
+  "mean": 0.513
+ },
+ "1000x63": {
+  "metrica": 0.574,
+  "skillcorner": 0.448,
+  "mean": 0.511
+ }
+}

@@ -19,9 +19,9 @@ for a match that has a few hundred. A decoder with an explicit switching cost re
 boundaries directly, and every term in it is something a coach would recognise.
 
 One learned term is involved, a classifier trained on other matches (§5). There are about twenty
-parameters, all command-line flags; their values were chosen on annotated matches from other
-sources, never on this match, and the public 5-minute ground truth was used only to check that
-each evidence term does what we think (§5).
+parameters, all command-line flags; every one of them was chosen on annotated matches from other
+sources, never on this match or its ground truth, by the procedure of §5. The public 5-minute
+ground truth is used for one thing only: the automatic check reported in §4.
 
 ### What the ground truth turned out to be
 
@@ -42,9 +42,9 @@ Dead-ball evidence, positive means dead:
 
 | term | signal | why |
 |---|---|---|
-| out | ball tracked outside the pitch, then held for 3 s | the one unambiguous cue, and it marks the stoppage instant; nobody restarts within 3 s |
+| out | ball tracked outside the pitch, then held for 6 s | the one unambiguous cue, and it marks the stoppage instant; nobody restarts within a few seconds |
 | speed | mean player speed over 1 s, relative to a rolling 3-minute median floored at the match median | play stops, players slow down. Relative, because the match's tempo drifts a lot: the public window is the fastest five minutes of the match. Floored, because a stoppage longer than the window drags the median down to walking pace and then looks like play |
-| far | the further team's nearest player is more than 13 m from the ball | set-piece geometry, capped low because a low block during build-up looks the same |
+| far | the further team's nearest player is more than 10 m from the ball | set-piece geometry, capped low because a low block during build-up looks the same |
 | placed | ball still (under 1.5 m/s) with nobody within 1.5 m | ball placed for a restart |
 | goal | from the goal moment to the next kick-off tag | the `GOALS` tag starts during the build-up, so the window starts at the ball seen over the line or, failing that, its last fast movement before it disappears into the net |
 | moving | ball travelling faster than 4 m/s | a fast ball is in play; a dead ball is still, carried or lost |
@@ -58,7 +58,7 @@ Team evidence, positive means home:
 | control | the gap between the nearest away and nearest home player, only on frames where someone is within 1.2 m of the ball |
 | carry | while nobody controls the ball, a weak vote for the last team that did, with no time limit |
 | touch | a change of ball velocity above 4 m/s within 3.5 m of a player, or the ball reappearing next to one, is an impulse for that player's team |
-| shape | home spread minus away spread, on frames without a ball only: the side in possession spreads out, the defender compacts |
+| shape | home spread minus away spread, on frames without a ball only: the side in possession spreads out, the defender compacts. Weight zero in the submitted setting: the external fit of §5 found it worth nothing |
 | carrier | which team has a nearby player whose velocity matches the ball's: the carrier moves with the ball, a defender beside it does not. Names the right team on 90% of the frames where it has a clear margin, a third of moving-ball frames |
 | restart prior | a tagged set piece that names a team (corner, goal kick, free kick, kick-off after a goal: the conceding side) adds a small vote for that team from 2 s before to 15 s after the tag |
 
@@ -71,8 +71,8 @@ first silent frame, four seconds before the real touch.
 
 Viterbi over the three states, per half. Switching between teams costs 30, entering or leaving a
 dead ball costs 25, in the units of the evidence above (typical per-frame evidence is between 0.5
-and 2). Dead-ball runs shorter than one second are merged into the following possession: a
-sub-second stoppage is a decoding shortcut, not football. Frames before kick-off, at halftime and
+and 2). Dead-ball runs shorter than half a second are merged into the following possession: a
+decoding shortcut, not football. Frames before kick-off, at halftime and
 after the final whistle are `X`; the graded frames of the second half before its kick-off are `D`,
 as the organisers' FAQ states. Finally every team-to-team switch is moved 10 frames later: the
 decoder switches when the opponent closes on the ball, the annotations at the controlled touch,
@@ -170,9 +170,12 @@ fidelity of a source's tracking, nor fully by the agreement of its labels with t
 convention; the one that transfers is the one whose ball and camera behave most like the
 challenge's during stoppages.
 
-What did not help on the SkillCorner set either: larger classifiers (600 trees of 31 leaves,
-1000 of 63: the public window falls to 0.40-0.51), five seeds instead of three (identical to the
-digit), and the Metrica classifier as a second evidence term.
+The classifier's size is chosen on external data too (`analysis/fit_capacity.py`,
+`analysis/fit_capacity_result.json`): with the two SkillCorner folds scored out of sample plus
+the Metrica games, 300 trees of 15 leaves and 600 of 31 tie at a mean spellF1 of 0.513 and
+1000 of 63 scores 0.511, so the smallest stays. Five seeds instead of three were identical to
+the digit, and the Metrica classifier as a second evidence term did not help, both measured
+before the clarification of §5 and not relied on.
 
 ### SoccerTrack v2: tried, no gain
 
@@ -210,15 +213,17 @@ data would be allowed; we did not build one.
 
 | submission | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
-| SyntaxEror (hand evidence + classifier trained on SkillCorner's matches) | 0.880 | 0.582 | 16 |
-| hand evidence only (`python -m possession.model`) | 0.892 | 0.537 | 18 |
+| SyntaxEror (hand evidence + classifier trained on SkillCorner's matches) | 0.860 | 0.553 | 17 |
+| hand evidence only (`python -m possession.model`) | 0.883 | 0.522 | 19 |
 | baseline_smooth125 | 0.581 | 0.424 | 16 |
 | baseline_smooth50 (published floor) | 0.621 | 0.326 | 26 |
 
-On the full match the file contains 272 possessions of mean 14 s and 105 stoppages of mean 25 s,
-with 41% of graded frames dead (hand evidence only: 305, 112, 40%). An earlier version of this
-file, with values chosen against our own labels of the match, scored 0.648 / 0.865 here; the
-organisers ruled that choice out (§5) and the values were re-chosen on other matches.
+On the full match the file contains 278 possessions of mean 13 s and 116 stoppages of mean 24 s,
+with 43% of graded frames dead (hand evidence only: 310, 117, 43%). This table is a check, not an
+input: no value was chosen or kept because of it. Earlier versions scored higher here (0.648 with
+values chosen against our own labels of the match, 0.582 with the nine decoder values chosen on
+other matches and the cue weights still hand-set); both choices are ruled out by §5, and the
+numbers are kept only so the history is honest.
 
 ## 5. Choosing the parameter values on other matches
 
@@ -233,20 +238,35 @@ video unchanged. So every value chosen that way was discarded, the hand labels a
 anything in this submission, no number in this document comes from them, and the values were
 re-chosen by the route the organisers describe, on annotated matches from other sources.
 
+On 3 November the organisers sent every participant a clarification that takes precedence over
+everything before it: no checking of output against the video, no hand labels or manual data on
+the provided game, no uploading of the provided data to AI services, and no training, fitting or
+calibrating on the ground-truth possession data or on the provided video; parameters that need
+tuning must be tuned on external data. For us that extended the rule from our own labels to the
+public window as well: a few cue weights had been left at hand-set values whose only check was
+the public window, the classifier's size had been argued from it, and so had the choice of the
+training set. Round 2 below moves every remaining tunable value onto the external fit, the size
+onto external folds (§2), and the training-set reasoning onto external evidence (below). The
+public window is reported in §4 as an automatic check and plays no other part.
+
 **The annotated matches** are SkillCorner's twenty A-League matches and Metrica's sample games 1
 and 2 (§2), with their providers' own public annotations, converted to a per-frame H/A/D label
 by `possession/skillcorner.py` and `possession/external.py`; nothing of ours is annotated, so
 there is nothing beyond those converters to share.
 
-**The procedure** is `analysis/fit_oos.py`, run once; its record is `analysis/fit_oos_result.json`.
+**The procedure** is `analysis/fit_oos.py`, run in two rounds; the records are
+`analysis/fit_oos_result.json` (round 1, 23 October, the nine values that had been chosen on our
+own labels) and `analysis/fit_oos_result_round2.json` (round 2, 3 November, every remaining cue
+weight, starting from round 1's result).
 
 1. Every external match gets an out-of-sample classifier (below): SkillCorner's matches are
    split in two folds, each fold's classifier predicts the other, and the Metrica games get the
    mean of both. So the classifier's weight is chosen on matches its training never saw.
-2. Starting from the values set by hand before any labelling, each of nine parameters in turn
-   takes the value of a small grid that maximises the mean `spellF1` over the external matches,
-   with SkillCorner and Metrica weighted equally as sources, scored with the organisers' metric
-   code against the event-derived labels; two passes over the parameters.
+2. Starting from the values set by hand before any labelling (round 1) or from round 1's result
+   (round 2), each parameter in turn takes the value of a small grid that maximises the mean
+   `spellF1` over the external matches, with SkillCorner and Metrica weighted equally as sources,
+   scored with the organisers' metric code against the event-derived labels; two passes over the
+   parameters.
 3. The chosen values are the defaults of `possession/model.py` and `possession/learned.py` and
    are applied to the challenge match unchanged.
 
@@ -261,14 +281,24 @@ there is nothing beyond those converters to share.
 | touch weight | 3 | 3 | 0, 3 |
 | tempo floor | off | on (1.0 x match median) | off, on |
 | switch delay (frames) | 0 | 10 | 0, 10, 20 |
+| shape weight (round 2) | 0.15 | 0 | 0, 0.15, 0.3 |
+| restart prior weight (round 2) | 0.5 | 0.5 | 0, 0.5, 1 |
+| moving-ball weight (round 2) | 1.5 | 3 | 0.75, 1.5, 3 |
+| kick weight (round 2) | 1 | 1 | 0, 1, 2 |
+| out-of-bounds hold weight / seconds (round 2) | 2 / 3 | 1 / 6 | 1, 2, 4 / 1.5, 3, 6 |
+| minimum dead run (frames, round 2) | 25 | 12 | 12, 25, 50 |
+| speed ratio (round 2) | 0.8 | 0.8 | 0.6, 0.8, 1.0 |
+| far-team radius (m, round 2) | 13 | 10 | 10, 13, 16 |
+| invisible-ball weight (round 2) | 0.3 | 0.6 | 0, 0.3, 0.6 |
 
-Mean `spellF1` over the external matches goes from 0.470 to 0.515 (Metrica 0.538 to 0.593,
-SkillCorner 0.402 to 0.438); the second pass changes nothing but the classifier weight. The
-values the public window cannot rank are left where the external fit put them even where it is
-flat. The lower team-switch cost is a property of those labels, whose possessions are about
-twice as fragmented as the organisers' truth (every ball lost and recovery is an event), and it
-is the main reason the public-window score fell from the version chosen on our own labels (§4):
-it is the price of choosing the values the allowed way.
+Round 1 takes the mean `spellF1` over the external matches from 0.470 to 0.515 (Metrica 0.538
+to 0.593, SkillCorner 0.402 to 0.438); round 2 takes it to 0.527 (Metrica 0.614, SkillCorner
+0.439), re-confirming every round-1 value and moving seven cue constants, most by amounts
+inside the noise. Values are left where the external fit put them even where it is flat. The
+lower team-switch cost is a property of those labels, whose possessions are about twice as
+fragmented as the organisers' truth (every ball lost and recovery is an event), and it is the
+main reason the public-window check (§4) reads lower than the versions tuned on this match: that
+is the price of choosing the values the allowed way, and we do not undo it.
 
 ### A learned evidence term, trained on other matches
 
@@ -288,16 +318,17 @@ training or the choice of the weight.
 
 | evidence | public window spellF1 / macroF1 | external matches, out of sample, mean spellF1 |
 |---|---|---|
-| hand-written | 0.537 / 0.892 | 0.498 |
-| hand + classifier trained on SkillCorner's 20 matches, x0.35 (submitted) | 0.582 / 0.880 | 0.515 |
+| hand-written | 0.522 / 0.883 | 0.509 |
+| hand + classifier trained on SkillCorner's 20 matches, x0.35 (submitted) | 0.553 / 0.860 | 0.527 |
 
-On the external matches the gain holds for weights 0.25 to 0.45 (0.513 to 0.515). Before the
-ruling of §5 the same classifier, and the alternatives of §2 (Metrica, PFF, Sportec, SoccerTrack,
-and combinations), were ranked against our own labels of the match; those rankings are not used
-and not reported. SkillCorner's matches were kept as the training set for the reasons visible
-without them: the largest set with a ball flagged as detected, and the only one whose classifier
-lifts the public window. The classifier alone under-segments the fast public window; the hand
-control cue is kept for that reason.
+On the external matches the gain holds for weights 0.25 to 0.45 (0.522 to 0.527). Before the
+rulings of §5 the same classifier, and the alternatives of §2 (Metrica, PFF, Sportec, SoccerTrack,
+and combinations), were ranked against our own labels of the match and the public window; those
+rankings are not used and not reported. SkillCorner's matches are the training set for reasons
+that need neither: the largest public set with a ball flagged as detected, and the only source
+whose classifier, scored out of sample on matches it never saw (its own folds and the Metrica
+games), lifts the hand-written decode, 0.509 to 0.527. The hand control cue is kept because
+without it the classifier under-segments on those same external matches.
 
 The three trained models are in `models/`, decoding from them is deterministic, and
 `python -m possession.learned --external <folder> --fit models/learned` retrains them from the
@@ -316,9 +347,11 @@ converted matches.
   carrying the ball at pace, is the main source of late entries into `D`.
 - **The 41% of frames without a ball** are handled through the carry term, the team-shape term and
   the decoder's inertia. There is no ball-position inference.
-- **Values chosen on other conventions.** The parameter values come from matches annotated by
+- **Values chosen on other conventions.** Every parameter value comes from matches annotated by
   other providers, whose possessions are about twice as fragmented as the organisers'; the
-  team-switch cost in particular is lower than this match would want.
+  team-switch cost in particular is lower than this match would want. The remedy the rules allow
+  is to annotate another match ourselves in the organisers' convention and choose the values on
+  it; the kit for that is in `labeling/` (its README), prepared on a SoccerTrack v2 match.
 
 ## 7. Reproduction
 
@@ -330,8 +363,9 @@ python make_submission.py           # -> out/SyntaxEror.csv
 Reads the three tactical files named in the README, from `./data` or `$MTAH_DATA_DIR`, and the
 three classifier files in `models/`. The run is deterministic; a clean clone on an empty data
 folder produces a byte-identical file. `python -m possession.model` writes the hand-evidence-only
-decode, `python analysis/fit_oos.py --external <folder> --proba <folder>` repeats the choice of
-the parameter values on the converted external matches. Retraining the classifier needs SkillCorner's open data (the twenty `*_tracking_extrapolated.jsonl`
+decode, `python analysis/fit_oos.py --external <folder> --proba <folder> --round 1|2` repeats the
+choice of the parameter values on the converted external matches and `python
+analysis/fit_capacity.py --external <folder>` the choice of the classifier's size. Retraining the classifier needs SkillCorner's open data (the twenty `*_tracking_extrapolated.jsonl`
 and `*_match.json` files, one folder per match): `python -m possession.skillcorner --root
 <folder> --out ../external-cache`, then `python -m possession.learned --external
 ../external-cache --fit models/learned`.

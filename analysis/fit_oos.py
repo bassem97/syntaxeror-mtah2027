@@ -25,9 +25,12 @@ sys.path.insert(0, os.path.join(ROOT, "..", "mtah", "evaluation"))
 from possession import model as M  # noqa: E402
 from possession import learned as L  # noqa: E402
 
-START = dict(team_cost=45, dead_cost=30, ctrl_m=1.5, carry_w=0.25, match_w=0.5, touch_w=3.0,
-             tempo_floor=0.0, switch_delay=0, w=0.0)          # values set by hand before any labelling
-GRID = {
+# Round 1 (23 Oct): the nine values that had been chosen on our own labels, from the values set
+# by hand before any labelling. Round 2 (3 Nov, organisers' clarification: every tunable value
+# must be tuned on external data): every remaining cue weight too, from round 1's result.
+START1 = dict(team_cost=45, dead_cost=30, ctrl_m=1.5, carry_w=0.25, match_w=0.5, touch_w=3.0,
+              tempo_floor=0.0, switch_delay=0, w=0.0)
+GRID1 = {
     "w": [0.0, 0.25, 0.35, 0.45],
     "team_cost": [30, 45, 60],
     "dead_cost": [25, 30, 40, 55],
@@ -38,6 +41,23 @@ GRID = {
     "tempo_floor": [0.0, 1.0],
     "switch_delay": [0, 10, 20],
 }
+START2 = dict(team_cost=30, dead_cost=25, ctrl_m=1.2, carry_w=0.25, match_w=0.5, touch_w=3.0,
+              tempo_floor=1.0, switch_delay=10, w=0.35,
+              shape_w=0.15, restart_w=0.5, moving_w=1.5, kick_w=1.0, out_hold_w=2.0, out_hold_s=3.0,
+              min_dead=25, speed_ratio=0.8, far_m=13.0, invis_w=0.3)
+GRID2 = dict(GRID1, **{
+    "shape_w": [0.0, 0.15, 0.3],
+    "restart_w": [0.0, 0.5, 1.0],
+    "moving_w": [0.75, 1.5, 3.0],
+    "kick_w": [0.0, 1.0, 2.0],
+    "out_hold_w": [1.0, 2.0, 4.0],
+    "out_hold_s": [1.5, 3.0, 6.0],
+    "min_dead": [12, 25, 50],
+    "speed_ratio": [0.6, 0.8, 1.0],
+    "far_m": [10.0, 13.0, 16.0],
+    "invis_w": [0.0, 0.3, 0.6],
+})
+START, GRID = START2, GRID2
 
 
 def oos_probabilities(games, proba_dir, models=None):
@@ -80,9 +100,12 @@ def main():
     ap.add_argument("--passes", type=int, default=2)
     ap.add_argument("--models", default=os.path.join(ROOT, "models", "learned"), help="committed classifier prefix, used when no SkillCorner game is fitted on")
     ap.add_argument("--tag", default="", help="suffix of the result file")
+    ap.add_argument("--round", type=int, default=2, help="1: the nine values of 23 Oct from the hand-set start; 2: every tunable value from round 1's result")
     ap.add_argument("--labels", help="frame,label CSV of our own annotation of the (single) fitted match, replacing its event-derived label")
     args = ap.parse_args()
     import possession_metrics as pm
+    global START, GRID
+    START, GRID = (START1, GRID1) if args.round == 1 else (START2, GRID2)
     base = {a.dest: a.default for a in M.argparser()._actions if a.dest != "help"}
     base["events"] = []
     games = L.external_tables(args.external, base, args.games.split(","))
