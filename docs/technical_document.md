@@ -363,7 +363,10 @@ converted matches (SkillCorner's and Metrica's, its default `--games`).
 
 ## 7. Reproduction
 
+Public repository: https://github.com/bassem97/syntaxeror-mtah2027
+
 ```bash
+git clone https://github.com/bassem97/syntaxeror-mtah2027.git && cd syntaxeror-mtah2027
 pip install -r requirements.txt     # numpy, pandas, lightgbm
 python make_submission.py           # -> out/SyntaxEror.csv
 ```

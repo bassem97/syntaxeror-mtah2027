@@ -7,7 +7,8 @@ video of FC Barcelona vs Athletic Club, produced from the automatic tracking and
 The method is a per-frame evidence model, hand-written terms plus a small classifier trained
 on SkillCorner's open tracking data and Metrica's sample games (22 other matches), decoded with a 3-state Viterbi, so
 possessions come out as whole segments rather than as a majority vote over frames. It is described in
-[docs/technical_document.md](docs/technical_document.md).
+[docs/technical_document.md](docs/technical_document.md). Public repository:
+https://github.com/bassem97/syntaxeror-mtah2027
 
 ## Reproduce the submission
 
